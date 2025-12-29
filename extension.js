@@ -22,6 +22,23 @@ import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/ex
 import {ElgatoLight, Temperature, Brightness} from './elgatoApi.js';
 import {discoverLights, isAvahiAvailable} from './discovery.js';
 
+const ICON_PATH = '/icons/hicolor/scalable/status/';
+const LIGHTBULB_ICON = 'lightbulb-symbolic';
+
+/**
+ * Gets the lightbulb icon, falling back to the bundled SVG if not in system theme.
+ *
+ * @param {string} extensionPath - The extension's base path
+ * @returns {Gio.Icon} The icon to use
+ */
+function getLightbulbIcon(extensionPath) {
+    const iconTheme = new St.IconTheme();
+    if (iconTheme.has_icon(LIGHTBULB_ICON)) {
+        return Gio.ThemedIcon.new(LIGHTBULB_ICON);
+    }
+    return Gio.icon_new_for_string(`${extensionPath}${ICON_PATH}${LIGHTBULB_ICON}.svg`);
+}
+
 /**
  * Per-light control item displayed in the Quick Settings menu.
  *
@@ -35,8 +52,9 @@ class LightControlItem extends PopupMenu.PopupBaseMenuItem {
      *
      * @param {ElgatoLight} light - The light instance to control
      * @param {Function} onChanged - Callback invoked when light state changes
+     * @param {string} extensionPath - The extension's base path for loading icons
      */
-    _init(light, onChanged) {
+    _init(light, onChanged, extensionPath) {
         super._init({
             activate: false,
             can_focus: false,
@@ -86,7 +104,7 @@ class LightControlItem extends PopupMenu.PopupBaseMenuItem {
         box.add_child(brightnessBox);
 
         brightnessBox.add_child(new St.Icon({
-            icon_name: 'lightbulb-symbolic',
+            gicon: getLightbulbIcon(extensionPath),
             icon_size: 16,
             style_class: 'elgato-slider-icon',
         }));
@@ -239,10 +257,13 @@ class ElgatoToggle extends QuickSettings.QuickMenuToggle {
      * @param {Extension} extensionObject - The extension instance
      */
     _init(extensionObject) {
+        // Get the icon with fallback to bundled SVG
+        const lightbulbIcon = getLightbulbIcon(extensionObject.path);
+
         super._init({
             title: _('Lights'),
             subtitle: _('Elgato'),
-            iconName: 'lightbulb-symbolic',
+            gicon: lightbulbIcon,
             toggleMode: true,
         });
 
@@ -253,7 +274,7 @@ class ElgatoToggle extends QuickSettings.QuickMenuToggle {
 
         // Menu header with refresh button
         this.menu.setHeader(
-            'lightbulb-symbolic',
+            lightbulbIcon,
             _('Elgato Lights'),
             _('Control your Key Lights')
         );
@@ -415,7 +436,7 @@ class ElgatoToggle extends QuickSettings.QuickMenuToggle {
 
         // Create control items for each light
         for (const light of this._lights) {
-            const item = new LightControlItem(light, () => this._updateToggleState());
+            const item = new LightControlItem(light, () => this._updateToggleState(), this._extensionObject.path);
             this.menu.addMenuItem(item);
             this._lightItems.push(item);
         }
@@ -527,15 +548,6 @@ export default class ElgatoLightsExtension extends Extension {
      * Creates and adds the indicator to Quick Settings.
      */
     enable() {
-        // Add custom icons path to icon theme
-        const iconTheme = new St.IconTheme();
-        const iconsPath = GLib.build_filenamev([this.path, 'icons']);
-        if (!iconTheme.get_search_path().includes(iconsPath)) {
-            iconTheme.append_search_path(iconsPath);
-            iconTheme.rescan_if_needed();
-        }
-        this._iconsPath = iconsPath;
-
         this._indicator = new ElgatoIndicator(this);
 
         // Add to Quick Settings panel
@@ -549,16 +561,5 @@ export default class ElgatoLightsExtension extends Extension {
     disable() {
         this._indicator?.destroy();
         this._indicator = null;
-
-        // Remove custom icons path from icon theme
-        if (this._iconsPath) {
-            const iconTheme = new St.IconTheme();
-            const searchPath = iconTheme.get_search_path();
-            if (searchPath) {
-                const filteredPath = searchPath.filter(p => p !== this._iconsPath);
-                iconTheme.set_search_path(filteredPath);
-            }
-            this._iconsPath = null;
-        }
     }
 }
