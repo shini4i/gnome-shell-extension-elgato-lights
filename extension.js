@@ -11,6 +11,8 @@ import St from 'gi://St';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Clutter from 'gi://Clutter';
+import Gtk from 'gi://Gtk';
+import Gdk from 'gi://Gdk';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
@@ -528,11 +530,10 @@ export default class ElgatoLightsExtension extends Extension {
      */
     enable() {
         // Add custom icons path to icon theme
-        const iconTheme = St.IconTheme.get_for_display(null);
+        const display = Gdk.Display.get_default();
+        const iconTheme = Gtk.IconTheme.get_for_display(display);
         const iconsPath = GLib.build_filenamev([this.path, 'icons']);
-        if (!iconTheme.get_search_path().includes(iconsPath)) {
-            iconTheme.add_search_path(iconsPath);
-        }
+        iconTheme.add_search_path(iconsPath);
         this._iconsPath = iconsPath;
 
         this._indicator = new ElgatoIndicator(this);
@@ -551,9 +552,12 @@ export default class ElgatoLightsExtension extends Extension {
 
         // Remove custom icons path from icon theme
         if (this._iconsPath) {
-            const iconTheme = St.IconTheme.get_for_display(null);
-            const searchPath = iconTheme.get_search_path().filter(p => p !== this._iconsPath);
-            iconTheme.set_search_path(searchPath);
+            const display = Gdk.Display.get_default();
+            const iconTheme = Gtk.IconTheme.get_for_display(display);
+            const searchPath = iconTheme.get_search_path();
+            if (searchPath) {
+                iconTheme.set_search_path(searchPath.filter(p => p !== this._iconsPath));
+            }
             this._iconsPath = null;
         }
     }
