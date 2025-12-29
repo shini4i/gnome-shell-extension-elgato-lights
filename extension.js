@@ -86,7 +86,7 @@ class LightControlItem extends PopupMenu.PopupBaseMenuItem {
         box.add_child(brightnessBox);
 
         brightnessBox.add_child(new St.Icon({
-            icon_name: 'display-brightness-symbolic',
+            icon_name: 'lightbulb-symbolic',
             icon_size: 16,
             style_class: 'elgato-slider-icon',
         }));
@@ -527,6 +527,14 @@ export default class ElgatoLightsExtension extends Extension {
      * Creates and adds the indicator to Quick Settings.
      */
     enable() {
+        // Add custom icons path to icon theme
+        const iconTheme = St.IconTheme.get_for_display(null);
+        const iconsPath = GLib.build_filenamev([this.path, 'icons']);
+        if (!iconTheme.get_search_path().includes(iconsPath)) {
+            iconTheme.add_search_path(iconsPath);
+        }
+        this._iconsPath = iconsPath;
+
         this._indicator = new ElgatoIndicator(this);
 
         // Add to Quick Settings panel
@@ -540,5 +548,13 @@ export default class ElgatoLightsExtension extends Extension {
     disable() {
         this._indicator?.destroy();
         this._indicator = null;
+
+        // Remove custom icons path from icon theme
+        if (this._iconsPath) {
+            const iconTheme = St.IconTheme.get_for_display(null);
+            const searchPath = iconTheme.get_search_path().filter(p => p !== this._iconsPath);
+            iconTheme.set_search_path(searchPath);
+            this._iconsPath = null;
+        }
     }
 }
