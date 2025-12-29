@@ -242,7 +242,7 @@ class ElgatoToggle extends QuickSettings.QuickMenuToggle {
         super._init({
             title: _('Lights'),
             subtitle: _('Elgato'),
-            iconName: 'dialog-information-symbolic',
+            iconName: 'lightbulb-symbolic',
             toggleMode: true,
         });
 
@@ -253,7 +253,7 @@ class ElgatoToggle extends QuickSettings.QuickMenuToggle {
 
         // Menu header with refresh button
         this.menu.setHeader(
-            'dialog-information-symbolic',
+            'lightbulb-symbolic',
             _('Elgato Lights'),
             _('Control your Key Lights')
         );

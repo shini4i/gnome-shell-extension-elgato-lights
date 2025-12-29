@@ -1,8 +1,5 @@
 # Elgato Lights GNOME Shell Extension
 
-> **Warning**
-> This project is currently a **Proof of Concept** and has not been tested on actual hardware. 
-
 A GNOME Shell extension that integrates Elgato Key Light controls into the Quick Settings panel.
 
 ## Features
