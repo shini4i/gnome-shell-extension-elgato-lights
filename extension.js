@@ -531,10 +531,18 @@ export default class ElgatoLightsExtension extends Extension {
     enable() {
         // Add custom icons path to icon theme
         const display = Gdk.Display.get_default();
-        const iconTheme = Gtk.IconTheme.get_for_display(display);
-        const iconsPath = GLib.build_filenamev([this.path, 'icons']);
-        iconTheme.add_search_path(iconsPath);
-        this._iconsPath = iconsPath;
+        if (display) {
+            const iconTheme = Gtk.IconTheme.get_for_display(display);
+            if (iconTheme) {
+                const iconsPath = GLib.build_filenamev([this.path, 'icons']);
+                iconTheme.add_search_path(iconsPath);
+                this._iconsPath = iconsPath;
+            } else {
+                console.warn('[ElgatoLights] Failed to get icon theme for display');
+            }
+        } else {
+            console.warn('[ElgatoLights] Failed to get default display');
+        }
 
         this._indicator = new ElgatoIndicator(this);
 
@@ -553,10 +561,18 @@ export default class ElgatoLightsExtension extends Extension {
         // Remove custom icons path from icon theme
         if (this._iconsPath) {
             const display = Gdk.Display.get_default();
-            const iconTheme = Gtk.IconTheme.get_for_display(display);
-            const searchPath = iconTheme.get_search_path();
-            if (searchPath) {
-                iconTheme.set_search_path(searchPath.filter(p => p !== this._iconsPath));
+            if (display) {
+                const iconTheme = Gtk.IconTheme.get_for_display(display);
+                if (iconTheme) {
+                    const searchPath = iconTheme.get_search_path();
+                    if (searchPath) {
+                        iconTheme.set_search_path(searchPath.filter(p => p !== this._iconsPath));
+                    }
+                } else {
+                    console.warn('[ElgatoLights] Failed to get icon theme during cleanup');
+                }
+            } else {
+                console.warn('[ElgatoLights] Failed to get default display during cleanup');
             }
             this._iconsPath = null;
         }
