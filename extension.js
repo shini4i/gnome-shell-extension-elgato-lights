@@ -528,10 +528,11 @@ export default class ElgatoLightsExtension extends Extension {
      */
     enable() {
         // Add custom icons path to icon theme
-        const iconTheme = St.IconTheme.get_for_display(null);
+        const iconTheme = new St.IconTheme();
         const iconsPath = GLib.build_filenamev([this.path, 'icons']);
         if (!iconTheme.get_search_path().includes(iconsPath)) {
-            iconTheme.add_search_path(iconsPath);
+            iconTheme.append_search_path(iconsPath);
+            iconTheme.rescan_if_needed();
         }
         this._iconsPath = iconsPath;
 
@@ -551,9 +552,12 @@ export default class ElgatoLightsExtension extends Extension {
 
         // Remove custom icons path from icon theme
         if (this._iconsPath) {
-            const iconTheme = St.IconTheme.get_for_display(null);
-            const searchPath = iconTheme.get_search_path().filter(p => p !== this._iconsPath);
-            iconTheme.set_search_path(searchPath);
+            const iconTheme = new St.IconTheme();
+            const searchPath = iconTheme.get_search_path();
+            if (searchPath) {
+                const filteredPath = searchPath.filter(p => p !== this._iconsPath);
+                iconTheme.set_search_path(filteredPath);
+            }
             this._iconsPath = null;
         }
     }
