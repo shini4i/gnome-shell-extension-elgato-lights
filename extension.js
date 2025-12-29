@@ -486,6 +486,37 @@ class ElgatoToggle extends QuickSettings.QuickMenuToggle {
 });
 
 /**
+ * System indicator container for the Elgato Lights Quick Settings toggle.
+ *
+ * Acts as a wrapper that manages the QuickMenuToggle and integrates it
+ * properly into the GNOME Quick Settings panel. All Quick Settings extensions
+ * should use a SystemIndicator instance as a container.
+ */
+const ElgatoIndicator = GObject.registerClass(
+class ElgatoIndicator extends QuickSettings.SystemIndicator {
+    /**
+     * Creates the system indicator with the Elgato toggle.
+     *
+     * @param {Extension} extensionObject - The extension instance
+     */
+    _init(extensionObject) {
+        super._init();
+
+        // Create and register the toggle with this indicator
+        this._toggle = new ElgatoToggle(extensionObject);
+        this.quickSettingsItems.push(this._toggle);
+    }
+
+    /**
+     * Cleans up resources when the indicator is destroyed.
+     */
+    destroy() {
+        this._toggle?.destroy();
+        super.destroy();
+    }
+});
+
+/**
  * Main extension entry point.
  *
  * Manages the lifecycle of the Elgato Lights Quick Settings integration.
@@ -493,18 +524,18 @@ class ElgatoToggle extends QuickSettings.QuickMenuToggle {
 export default class ElgatoLightsExtension extends Extension {
     /**
      * Called when the extension is enabled.
-     * Creates and adds the toggle to Quick Settings.
+     * Creates and adds the indicator to Quick Settings.
      */
     enable() {
-        this._indicator = new ElgatoToggle(this);
+        this._indicator = new ElgatoIndicator(this);
 
-        // Add to Quick Settings
+        // Add to Quick Settings panel
         Main.panel.statusArea.quickSettings.addExternalIndicator(this._indicator);
     }
 
     /**
      * Called when the extension is disabled.
-     * Removes and destroys the toggle.
+     * Removes and destroys the indicator.
      */
     disable() {
         this._indicator?.destroy();
