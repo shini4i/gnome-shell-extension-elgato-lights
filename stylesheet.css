@@ -1,0 +1,43 @@
+/**
+ * Elgato Lights GNOME Shell Extension Stylesheet
+ *
+ * Defines custom styles for the Quick Settings menu components.
+ */
+
+/* Container for each light's controls */
+.elgato-light-control {
+    padding: 8px 12px;
+    spacing: 8px;
+}
+
+/* Slider rows (brightness and temperature) */
+.elgato-slider-row {
+    spacing: 8px;
+}
+
+/* Icons next to sliders */
+.elgato-slider-icon {
+    margin-right: 8px;
+}
+
+/* Value labels next to sliders */
+.elgato-slider-label {
+    min-width: 48px;
+    text-align: right;
+}
+
+/* Per-light toggle button */
+.elgato-light-toggle {
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+/* Toggle button when light is on */
+.elgato-light-toggle.on {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Refresh button in menu header */
+.elgato-refresh-button {
+    margin-left: 8px;
+}

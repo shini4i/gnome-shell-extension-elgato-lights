@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.elgato-lights"
+          path="/org/gnome/shell/extensions/elgato-lights/">
+
+    <!-- Cached lights as JSON array: [{"name":"...","host":"...","port":9123}] -->
+    <key name="cached-lights" type="s">
+      <default>''</default>
+      <summary>Cached discovered lights</summary>
+      <description>JSON array of previously discovered lights for faster startup</description>
+    </key>
+
+    <!-- Manual lights for when discovery fails -->
+    <key name="manual-lights" type="s">
+      <default>''</default>
+      <summary>Manually configured lights</summary>
+      <description>JSON array of manually added lights</description>
+    </key>
+
+    <!-- Auto-discover on startup -->
+    <key name="auto-discover" type="b">
+      <default>true</default>
+      <summary>Auto-discover lights on startup</summary>
+      <description>Whether to automatically discover lights when the extension starts</description>
+    </key>
+
+  </schema>
+</schemalist>

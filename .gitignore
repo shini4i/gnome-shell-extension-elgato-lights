@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Nix/direnv
+.direnv/
+result
+
+# Test coverage
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.zip
+
+# Compiled GSettings schema (regenerate with: glib-compile-schemas schemas/)
+schemas/gschemas.compiled

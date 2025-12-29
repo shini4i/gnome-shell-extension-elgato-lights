@@ -1,0 +1,32 @@
+{
+  "name": "gnome-shell-extension-elgato-lights",
+  "version": "1.0.0",
+  "description": "GNOME Shell extension to control Elgato Key Lights from Quick Settings",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.28.0",
+    "prettier": "^3.5.3"
+  },
+  "keywords": [
+    "gnome",
+    "gnome-shell",
+    "extension",
+    "elgato",
+    "key-light"
+  ],
+  "author": "shini4i",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shini4i/gnome-shell-extension-elgato-lights"
+  }
+}
