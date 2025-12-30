@@ -174,12 +174,54 @@ export class ElgatoLight {
     }
 
     /**
+     * Sets only the on/off state without affecting brightness or temperature.
+     * This preserves the light's current settings.
+     *
+     * @param {boolean} on - Whether to turn the light on or off
+     * @returns {Promise<boolean>} True if successful
+     */
+    async setOn(on) {
+        try {
+            const payload = JSON.stringify({
+                numberOfLights: 1,
+                lights: [{
+                    on: on ? 1 : 0,
+                }],
+            });
+
+            const message = Soup.Message.new('PUT', `${this.baseUrl}/elgato/lights`);
+            message.set_request_body_from_bytes(
+                'application/json',
+                new GLib.Bytes(new TextEncoder().encode(payload))
+            );
+
+            const bytes = await this._session.send_and_read_async(
+                message,
+                GLib.PRIORITY_DEFAULT,
+                null
+            );
+
+            if (message.get_status() !== Soup.Status.OK) {
+                throw new Error(`HTTP ${message.get_status()}`);
+            }
+
+            // Update local cache
+            this.on = on;
+
+            return true;
+        } catch (e) {
+            console.error(`[ElgatoLights] Failed to set on state on ${this.name}: ${e.message}`);
+            return false;
+        }
+    }
+
+    /**
      * Turns the light on while maintaining current brightness and temperature.
      *
      * @returns {Promise<boolean>} True if successful, false otherwise
      */
     async turnOn() {
-        return this.setState(true, this.brightness, this.temperature);
+        return this.setOn(true);
     }
 
     /**
@@ -188,7 +230,7 @@ export class ElgatoLight {
      * @returns {Promise<boolean>} True if successful, false otherwise
      */
     async turnOff() {
-        return this.setState(false, this.brightness, this.temperature);
+        return this.setOn(false);
     }
 
     /**
@@ -197,7 +239,7 @@ export class ElgatoLight {
      * @returns {Promise<boolean>} True if successful, false otherwise
      */
     async toggle() {
-        return this.setState(!this.on, this.brightness, this.temperature);
+        return this.setOn(!this.on);
     }
 
     /**
