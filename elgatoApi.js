@@ -182,31 +182,56 @@ export class ElgatoLight {
      */
     async setOn(on) {
         try {
-            const payload = JSON.stringify({
-                numberOfLights: 1,
-                lights: [{
-                    on: on ? 1 : 0,
-                }],
-            });
-
-            const message = Soup.Message.new('PUT', `${this.baseUrl}/elgato/lights`);
-            message.set_request_body_from_bytes(
-                'application/json',
-                new GLib.Bytes(new TextEncoder().encode(payload))
-            );
-
-            const bytes = await this._session.send_and_read_async(
-                message,
+            // Fetch current state to preserve brightness and temperature
+            const getMessage = Soup.Message.new('GET', `${this.baseUrl}/elgato/lights`);
+            const getBytes = await this._session.send_and_read_async(
+                getMessage,
                 GLib.PRIORITY_DEFAULT,
                 null
             );
 
-            if (message.get_status() !== Soup.Status.OK) {
-                throw new Error(`HTTP ${message.get_status()}`);
+            if (getMessage.get_status() !== Soup.Status.OK) {
+                throw new Error(`HTTP ${getMessage.get_status()}`);
             }
 
-            // Update local cache
+            const decoder = new TextDecoder('utf-8');
+            const text = decoder.decode(getBytes.get_data());
+            const data = JSON.parse(text);
+
+            if (!data.lights || data.lights.length === 0) {
+                throw new Error('No lights in response');
+            }
+
+            // Update only the on field, preserve brightness and temperature from device
+            const payload = JSON.stringify({
+                numberOfLights: 1,
+                lights: [{
+                    on: on ? 1 : 0,
+                    brightness: data.lights[0].brightness,
+                    temperature: data.lights[0].temperature,
+                }],
+            });
+
+            const putMessage = Soup.Message.new('PUT', `${this.baseUrl}/elgato/lights`);
+            putMessage.set_request_body_from_bytes(
+                'application/json',
+                new GLib.Bytes(new TextEncoder().encode(payload))
+            );
+
+            const putBytes = await this._session.send_and_read_async(
+                putMessage,
+                GLib.PRIORITY_DEFAULT,
+                null
+            );
+
+            if (putMessage.get_status() !== Soup.Status.OK) {
+                throw new Error(`HTTP ${putMessage.get_status()}`);
+            }
+
+            // Update local cache with actual values from device
             this.on = on;
+            this.brightness = data.lights[0].brightness;
+            this.temperature = data.lights[0].temperature;
 
             return true;
         } catch (e) {
