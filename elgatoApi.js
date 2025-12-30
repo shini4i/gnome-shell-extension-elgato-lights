@@ -264,6 +264,8 @@ export class ElgatoLight {
      * @returns {Promise<boolean>} True if successful, false otherwise
      */
     async toggle() {
+        // Fetch current state first to avoid using stale cache
+        await this.fetchState();
         return this.setOn(!this.on);
     }
 
