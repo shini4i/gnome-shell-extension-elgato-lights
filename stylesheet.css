@@ -67,7 +67,7 @@
 /* Info label (left side) */
 .elgato-info-label {
     font-weight: bold;
-    min-width: 70px;
+    min-width: 90px;
 }
 
 /* Info value (right side) */
