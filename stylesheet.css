@@ -41,3 +41,36 @@
 .elgato-refresh-button {
     margin-left: 8px;
 }
+
+/* Info button next to toggle */
+.elgato-info-button {
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-right: 4px;
+}
+
+/* Info panel container */
+.elgato-info-panel {
+    padding: 8px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    spacing: 4px;
+}
+
+/* Info row layout */
+.elgato-info-row {
+    spacing: 8px;
+}
+
+/* Info label (left side) */
+.elgato-info-label {
+    font-weight: bold;
+    min-width: 90px;
+}
+
+/* Info value (right side) */
+.elgato-info-value {
+    color: rgba(255, 255, 255, 0.7);
+}

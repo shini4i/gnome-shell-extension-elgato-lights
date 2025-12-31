@@ -72,7 +72,7 @@ class LightControlItem extends PopupMenu.PopupBaseMenuItem {
         });
         this.add_child(box);
 
-        // Header row: name + toggle
+        // Header row: name + info button + toggle
         const headerBox = new St.BoxLayout({
             x_expand: true,
         });
@@ -85,6 +85,18 @@ class LightControlItem extends PopupMenu.PopupBaseMenuItem {
         });
         headerBox.add_child(this._nameLabel);
 
+        // Info button
+        this._infoButton = new St.Button({
+            style_class: 'elgato-info-button',
+            can_focus: true,
+            child: new St.Icon({
+                icon_name: 'dialog-information-symbolic',
+                icon_size: 16,
+            }),
+        });
+        this._infoButton.connect('clicked', () => this._onInfoClicked());
+        headerBox.add_child(this._infoButton);
+
         this._toggle = new St.Button({
             style_class: 'elgato-light-toggle',
             can_focus: true,
@@ -95,6 +107,14 @@ class LightControlItem extends PopupMenu.PopupBaseMenuItem {
         });
         this._toggle.connect('clicked', () => this._onToggleClicked());
         headerBox.add_child(this._toggle);
+
+        // Info panel (hidden by default)
+        this._infoBox = new St.BoxLayout({
+            vertical: true,
+            style_class: 'elgato-info-panel',
+            visible: false,
+        });
+        box.add_child(this._infoBox);
 
         // Brightness slider row
         const brightnessBox = new St.BoxLayout({
@@ -182,6 +202,47 @@ class LightControlItem extends PopupMenu.PopupBaseMenuItem {
         await this._light.toggle();
         this.updateState();
         this._onChanged?.();
+    }
+
+
+    /**
+     * Handles info button click - toggles the info panel visibility.
+     */
+    _onInfoClicked() {
+        const isVisible = this._infoBox.visible;
+
+        if (!isVisible) {
+            // Populate info panel
+            this._infoBox.destroy_all_children();
+
+            const light = this._light;
+
+            const addInfoRow = (label, value) => {
+                if (value === null || value === undefined) {
+                    return;
+                }
+                const row = new St.BoxLayout({
+                    style_class: 'elgato-info-row',
+                });
+                row.add_child(new St.Label({
+                    text: `${label}:`,
+                    style_class: 'elgato-info-label',
+                }));
+                row.add_child(new St.Label({
+                    text: String(value),
+                    style_class: 'elgato-info-value',
+                    x_expand: true,
+                }));
+                this._infoBox.add_child(row);
+            };
+
+            addInfoRow(_('Product'), light.productName);
+            addInfoRow(_('Firmware'), light.firmwareVersion);
+            addInfoRow(_('Serial'), light.serialNumber);
+            addInfoRow(_('IP Address'), `${light.host}:${light.port}`);
+        }
+
+        this._infoBox.visible = !isVisible;
     }
 
     /**

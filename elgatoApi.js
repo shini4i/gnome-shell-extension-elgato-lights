@@ -40,6 +40,12 @@ export class ElgatoLight {
         this.brightness = 50;
         this.temperature = 200;
         this.displayName = name;
+
+        // Accessory info (populated by fetchInfo)
+        this.productName = null;
+        this.firmwareVersion = null;
+        this.serialNumber = null;
+        this.hardwareBoardType = null;
     }
 
     /**
@@ -115,8 +121,21 @@ export class ElgatoLight {
             const text = decoder.decode(bytes.get_data());
             const data = JSON.parse(text);
 
+            // Store all accessory info
             if (data.displayName) {
                 this.displayName = data.displayName;
+            }
+            if (data.productName) {
+                this.productName = data.productName;
+            }
+            if (data.firmwareVersion) {
+                this.firmwareVersion = data.firmwareVersion;
+            }
+            if (data.serialNumber) {
+                this.serialNumber = data.serialNumber;
+            }
+            if (data.hardwareBoardType !== undefined) {
+                this.hardwareBoardType = data.hardwareBoardType;
             }
 
             return data;
