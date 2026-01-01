@@ -15,7 +15,7 @@ jobs:
       - name: Update nixpkgs
         uses: shini4i/nixpkgs-updater@v1
         with:
-          package-name: my-package
+          package-name: gnome-shell-extension-elgato-lights
           version: ${{ github.ref_name }}
-          target-repo: owner/nixpkgs
+          target-repo: shini4i/nixpkgs
           github-token: ${{ secrets.NIXPKGS_TOKEN }}
