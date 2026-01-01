@@ -23,20 +23,23 @@ import {ElgatoLight, Temperature, Brightness} from './elgatoApi.js';
 import {discoverLights, isAvahiAvailable} from './discovery.js';
 
 const ICON_PATH = '/icons/hicolor/scalable/status/';
-const LIGHTBULB_ICON = 'lightbulb-symbolic';
+const LIGHTBULB_ON_ICON = 'lightbulb-on-symbolic';
+const LIGHTBULB_OFF_ICON = 'lightbulb-off-symbolic';
 
 /**
- * Gets the lightbulb icon, falling back to the bundled SVG if not in system theme.
+ * Gets the lightbulb icon based on state, falling back to bundled SVG if not in system theme.
  *
  * @param {string} extensionPath - The extension's base path
+ * @param {boolean} isOn - Whether to return the "on" icon (with rays) or "off" icon
  * @returns {Gio.Icon} The icon to use
  */
-function getLightbulbIcon(extensionPath) {
+function getLightbulbIcon(extensionPath, isOn = false) {
+    const iconName = isOn ? LIGHTBULB_ON_ICON : LIGHTBULB_OFF_ICON;
     const iconTheme = new St.IconTheme();
-    if (iconTheme.has_icon(LIGHTBULB_ICON)) {
-        return Gio.ThemedIcon.new(LIGHTBULB_ICON);
+    if (iconTheme.has_icon(iconName)) {
+        return Gio.ThemedIcon.new(iconName);
     }
-    return Gio.icon_new_for_string(`${extensionPath}${ICON_PATH}${LIGHTBULB_ICON}.svg`);
+    return Gio.icon_new_for_string(`${extensionPath}${ICON_PATH}${iconName}.svg`);
 }
 
 /**
@@ -123,8 +126,10 @@ class LightControlItem extends PopupMenu.PopupBaseMenuItem {
         });
         box.add_child(brightnessBox);
 
+        // Static "off" icon for brightness slider - represents the control concept,
+        // not the on/off state (which is indicated by the toggle button)
         brightnessBox.add_child(new St.Icon({
-            gicon: getLightbulbIcon(extensionPath),
+            gicon: getLightbulbIcon(extensionPath, false),
             icon_size: 16,
             style_class: 'elgato-slider-icon',
         }));
@@ -316,15 +321,20 @@ class ElgatoToggle extends QuickSettings.QuickMenuToggle {
      * Creates the main Elgato toggle for Quick Settings.
      *
      * @param {Extension} extensionObject - The extension instance
+     * @param {ElgatoIndicator} indicator - The parent system indicator for panel icon updates
      */
-    _init(extensionObject) {
-        // Get the icon with fallback to bundled SVG
-        const lightbulbIcon = getLightbulbIcon(extensionObject.path);
+    _init(extensionObject, indicator) {
+        // Store indicator reference for panel icon updates
+        this._panelIndicator = indicator;
+
+        // Get icons with fallback to bundled SVGs
+        this._iconOn = getLightbulbIcon(extensionObject.path, true);
+        this._iconOff = getLightbulbIcon(extensionObject.path, false);
 
         super._init({
             title: _('Lights'),
             subtitle: _('Elgato'),
-            gicon: lightbulbIcon,
+            gicon: this._iconOff,
             toggleMode: true,
         });
 
@@ -335,7 +345,7 @@ class ElgatoToggle extends QuickSettings.QuickMenuToggle {
 
         // Menu header with refresh button
         this.menu.setHeader(
-            lightbulbIcon,
+            this._iconOff,
             _('Elgato Lights'),
             _('Control your Key Lights')
         );
@@ -513,6 +523,9 @@ class ElgatoToggle extends QuickSettings.QuickMenuToggle {
         const anyOn = this._lights.some(l => l.on);
         this.checked = anyOn;
 
+        // Update icons based on state
+        this._updateIcon(anyOn);
+
         // Update subtitle
         const onCount = this._lights.filter(l => l.on).length;
         if (onCount === 0) {
@@ -522,6 +535,27 @@ class ElgatoToggle extends QuickSettings.QuickMenuToggle {
         } else {
             this.subtitle = _('%d of %d on').format(onCount, this._lights.length);
         }
+    }
+
+    /**
+     * Updates the toggle and menu header icons based on light state.
+     * Also notifies the panel indicator to show/hide.
+     *
+     * @param {boolean} anyOn - Whether any light is currently on
+     */
+    _updateIcon(anyOn) {
+        const icon = anyOn ? this._iconOn : this._iconOff;
+        this.gicon = icon;
+
+        // Update menu header icon
+        this.menu.setHeader(
+            icon,
+            _('Elgato Lights'),
+            _('Control your Key Lights')
+        );
+
+        // Notify panel indicator to show/hide
+        this._panelIndicator?.updateIndicator(anyOn);
     }
 
     /**
@@ -584,9 +618,23 @@ class ElgatoIndicator extends QuickSettings.SystemIndicator {
     _init(extensionObject) {
         super._init();
 
+        // Add panel indicator (visible only when lights are on)
+        this._indicator = this._addIndicator();
+        this._indicator.visible = false;
+        this._indicator.gicon = getLightbulbIcon(extensionObject.path, true);
+
         // Create and register the toggle with this indicator
-        this._toggle = new ElgatoToggle(extensionObject);
+        this._toggle = new ElgatoToggle(extensionObject, this);
         this.quickSettingsItems.push(this._toggle);
+    }
+
+    /**
+     * Updates the panel indicator visibility based on light state.
+     *
+     * @param {boolean} anyLightOn - Whether any light is currently on
+     */
+    updateIndicator(anyLightOn) {
+        this._indicator.visible = anyLightOn;
     }
 
     /**
