@@ -1,9 +1,9 @@
 {
-    "uuid": "elgato-lights@shini4i.github.io",
-    "name": "Elgato Lights",
-    "description": "Control Elgato Key Lights from GNOME Quick Settings",
-    "version": 1,
-    "shell-version": ["47", "48", "49"],
-    "url": "https://github.com/shini4i/gnome-shell-extension-elgato-lights",
-    "settings-schema": "org.gnome.shell.extensions.elgato-lights"
+  "uuid": "elgato-lights@shini4i.github.io",
+  "name": "Elgato Lights",
+  "description": "Control Elgato Key Lights from GNOME Quick Settings",
+  "version": 1,
+  "shell-version": ["47", "48", "49"],
+  "url": "https://github.com/shini4i/gnome-shell-extension-elgato-lights",
+  "settings-schema": "org.gnome.shell.extensions.elgato-lights"
 }

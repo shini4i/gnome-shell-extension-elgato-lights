@@ -1,0 +1,16 @@
+[tool.bumpversion]
+current_version = "0.1.3"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+search = "{current_version}"
+replace = "{new_version}"
+commit = true
+tag = true
+tag_name = "v{new_version}"
+tag_message = "Version {new_version}"
+message = "Version {new_version}"
+
+[[tool.bumpversion.files]]
+filename = "package.json"
+search = "\"version\": \"{current_version}\""
+replace = "\"version\": \"{new_version}\""

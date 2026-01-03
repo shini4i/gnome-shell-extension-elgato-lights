@@ -3,10 +3,10 @@ name: Release nix package
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
-  update-nixpkgs:
+  releaser-nixpkgs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Nix
@@ -19,3 +19,16 @@ jobs:
           version: ${{ github.ref_name }}
           target-repo: shini4i/nixpkgs
           github-token: ${{ secrets.NIXPKGS_TOKEN }}
+
+  releaser-github:
+    needs: [releaser-nixpkgs]
+    runs-on: ubuntu-latest
+    name: github-releaser
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        with:
+          generate_release_notes: true

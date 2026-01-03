@@ -1,0 +1,17 @@
+version: "3"
+
+tasks:
+  test:
+    desc: Run unit tests
+    cmds:
+      - npm test
+
+  bump:patch:
+    desc: Bump patch version (e.g., 0.1.3 → 0.1.4)
+    cmds:
+      - bump-my-version bump patch
+
+  bump:minor:
+    desc: Bump minor version (e.g., 0.1.3 → 0.2.0)
+    cmds:
+      - bump-my-version bump minor
