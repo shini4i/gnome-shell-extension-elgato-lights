@@ -45,7 +45,7 @@ export async function discoverLights() {
         GLib.source_remove(timeoutId);
 
         try {
-          const [ok, stdout, _stderr] = proc.communicate_utf8_finish(result);
+          const [ok, stdout] = proc.communicate_utf8_finish(result);
 
           if (!ok) {
             reject(new Error("avahi-browse failed"));
@@ -74,17 +74,25 @@ export async function discoverLights() {
  * This is required for mDNS discovery to work. If not available,
  * users will need to configure lights manually.
  *
- * @returns {boolean} True if avahi-browse is available, false otherwise
+ * @returns {Promise<boolean>} True if avahi-browse is available, false otherwise
  */
-export function isAvahiAvailable() {
-  try {
-    const proc = Gio.Subprocess.new(
-      ["which", "avahi-browse"],
-      Gio.SubprocessFlags.STDOUT_PIPE,
-    );
-    proc.wait(null);
-    return proc.get_successful();
-  } catch (_e) {
-    return false;
-  }
+export async function isAvahiAvailable() {
+  return new Promise((resolve) => {
+    try {
+      const proc = Gio.Subprocess.new(
+        ["which", "avahi-browse"],
+        Gio.SubprocessFlags.STDOUT_PIPE,
+      );
+      proc.wait_async(null, (proc, result) => {
+        try {
+          proc.wait_finish(result);
+          resolve(proc.get_successful());
+        } catch {
+          resolve(false);
+        }
+      });
+    } catch {
+      resolve(false);
+    }
+  });
 }

@@ -24,6 +24,7 @@ import {
 
 import { ElgatoLight, Temperature, Brightness } from "./elgatoApi.js";
 import { discoverLights, isAvahiAvailable } from "./discovery.js";
+import { parseCachedLights } from "./lib/parser.js";
 
 const ICON_PATH = "/icons/hicolor/scalable/status/";
 const LIGHTBULB_ON_ICON = "lightbulb-on-symbolic";
@@ -70,6 +71,9 @@ const LightControlItem = GObject.registerClass(
       this._onChanged = onChanged;
       this._updating = false;
 
+      // Track signals for cleanup
+      this._signals = [];
+
       // Main container
       const box = new St.BoxLayout({
         vertical: true,
@@ -100,7 +104,10 @@ const LightControlItem = GObject.registerClass(
           icon_size: 16,
         }),
       });
-      this._infoButton.connect("clicked", () => this._onInfoClicked());
+      this._signals.push({
+        obj: this._infoButton,
+        id: this._infoButton.connect("clicked", () => this._onInfoClicked()),
+      });
       headerBox.add_child(this._infoButton);
 
       this._toggle = new St.Button({
@@ -111,7 +118,10 @@ const LightControlItem = GObject.registerClass(
           icon_size: 16,
         }),
       });
-      this._toggle.connect("clicked", () => this._onToggleClicked());
+      this._signals.push({
+        obj: this._toggle,
+        id: this._toggle.connect("clicked", () => this._onToggleClicked()),
+      });
       headerBox.add_child(this._toggle);
 
       // Info panel (hidden by default)
@@ -141,9 +151,12 @@ const LightControlItem = GObject.registerClass(
 
       this._brightnessSlider = new Slider.Slider(0.5);
       this._brightnessSlider.x_expand = true;
-      this._brightnessSlider.connect("notify::value", () =>
-        this._onBrightnessChanged(),
-      );
+      this._signals.push({
+        obj: this._brightnessSlider,
+        id: this._brightnessSlider.connect("notify::value", () =>
+          this._onBrightnessChanged(),
+        ),
+      });
       brightnessBox.add_child(this._brightnessSlider);
 
       this._brightnessLabel = new St.Label({
@@ -170,9 +183,12 @@ const LightControlItem = GObject.registerClass(
 
       this._tempSlider = new Slider.Slider(0.5);
       this._tempSlider.x_expand = true;
-      this._tempSlider.connect("notify::value", () =>
-        this._onTemperatureChanged(),
-      );
+      this._signals.push({
+        obj: this._tempSlider,
+        id: this._tempSlider.connect("notify::value", () =>
+          this._onTemperatureChanged(),
+        ),
+      });
       tempBox.add_child(this._tempSlider);
 
       this._tempLabel = new St.Label({
@@ -316,11 +332,20 @@ const LightControlItem = GObject.registerClass(
      * Cleans up resources when the item is destroyed.
      */
     destroy() {
+      // Disconnect tracked signals
+      for (const signal of this._signals) {
+        signal.obj.disconnect(signal.id);
+      }
+      this._signals = [];
+
+      // Remove pending timeouts
       if (this._brightnessTimeout) {
         GLib.source_remove(this._brightnessTimeout);
+        this._brightnessTimeout = null;
       }
       if (this._tempTimeout) {
         GLib.source_remove(this._tempTimeout);
+        this._tempTimeout = null;
       }
       super.destroy();
     }
@@ -362,6 +387,9 @@ const ElgatoToggle = GObject.registerClass(
       this._lights = [];
       this._lightItems = [];
 
+      // Track signal IDs for cleanup
+      this._signalIds = [];
+
       // Menu header with refresh button
       this.menu.setHeader(
         this._iconOff,
@@ -370,7 +398,7 @@ const ElgatoToggle = GObject.registerClass(
       );
 
       // Add refresh button to header
-      const refreshButton = new St.Button({
+      this._refreshButton = new St.Button({
         style_class: "button elgato-refresh-button",
         can_focus: true,
         child: new St.Icon({
@@ -378,8 +406,10 @@ const ElgatoToggle = GObject.registerClass(
           icon_size: 16,
         }),
       });
-      refreshButton.connect("clicked", () => this._onRefreshClicked());
-      this.menu.addHeaderSuffix(refreshButton);
+      this._refreshButtonSignalId = this._refreshButton.connect("clicked", () =>
+        this._onRefreshClicked(),
+      );
+      this.menu.addHeaderSuffix(this._refreshButton);
 
       // Status item (shown when no lights found)
       this._statusItem = new PopupMenu.PopupMenuItem(_("No lights found"), {
@@ -392,12 +422,27 @@ const ElgatoToggle = GObject.registerClass(
       this.menu.addMenuItem(this._separator);
       this._separator.visible = false;
 
-      // Connect toggle click
-      this.connect("clicked", () => this._onToggleClicked());
+      // Connect toggle click and track signal ID
+      this._signalIds.push(
+        this.connect("clicked", () => this._onToggleClicked()),
+      );
 
-      // Initial discovery
-      this._loadCachedLights();
-      this._discoverLights();
+      // Initialize asynchronously (load cache first, then discover)
+      this._initializeAsync();
+    }
+
+    /**
+     * Initializes lights asynchronously to avoid race conditions.
+     * Loads cached lights first, then runs discovery.
+     * @private
+     */
+    async _initializeAsync() {
+      try {
+        await this._loadCachedLights();
+        await this._discoverLights();
+      } catch (e) {
+        console.error(`[ElgatoLights] Initialization failed: ${e.message}`);
+      }
     }
 
     /**
@@ -405,21 +450,12 @@ const ElgatoToggle = GObject.registerClass(
      * Fetches current state from each light to display actual values.
      */
     async _loadCachedLights() {
-      try {
-        const cached = this._settings.get_string("cached-lights");
-        if (cached) {
-          const lightsData = JSON.parse(cached);
-          this._createLightsFromData(lightsData);
+      const cached = this._settings.get_string("cached-lights");
+      const lightsData = parseCachedLights(cached);
 
-          // Fetch actual current state from cached lights
-          if (this._lights.length > 0) {
-            await this._refreshLightStates();
-          }
-        }
-      } catch (e) {
-        console.error(
-          `[ElgatoLights] Failed to load cached lights: ${e.message}`,
-        );
+      if (lightsData.length > 0) {
+        this._createLightsFromData(lightsData);
+        await this._refreshLightStates();
       }
     }
 
@@ -470,7 +506,7 @@ const ElgatoToggle = GObject.registerClass(
       this._statusItem.label.text = _("Discovering...");
 
       try {
-        if (!isAvahiAvailable()) {
+        if (!(await isAvahiAvailable())) {
           this._statusItem.label.text = _("avahi-tools not installed");
           return;
         }
@@ -621,6 +657,18 @@ const ElgatoToggle = GObject.registerClass(
      * Cleans up resources when the toggle is destroyed.
      */
     destroy() {
+      // Disconnect tracked signals
+      for (const id of this._signalIds) {
+        this.disconnect(id);
+      }
+      this._signalIds = [];
+
+      // Disconnect refresh button signal
+      if (this._refreshButton && this._refreshButtonSignalId) {
+        this._refreshButton.disconnect(this._refreshButtonSignalId);
+        this._refreshButtonSignalId = null;
+      }
+
       for (const item of this._lightItems) {
         item.destroy();
       }
