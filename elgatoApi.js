@@ -49,6 +49,99 @@ export class ElgatoLight {
   }
 
   /**
+   * Delays execution for the specified number of milliseconds.
+   *
+   * @param {number} ms - Delay duration in milliseconds
+   * @returns {Promise<void>}
+   * @private
+   */
+  _delay(ms) {
+    return new Promise((resolve) => {
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+        resolve();
+        return GLib.SOURCE_REMOVE;
+      });
+    });
+  }
+
+  /**
+   * Sends an HTTP request with retry logic and linear backoff.
+   *
+   * Retries on transient errors (5xx status codes and network failures).
+   * Uses linear backoff: 1s, 2s, 3s delays between retries.
+   *
+   * @param {string} method - HTTP method (GET, PUT, etc.)
+   * @param {string} url - The URL to send the request to
+   * @param {string|null} body - JSON body for PUT requests, null for GET
+   * @param {number} maxRetries - Maximum number of retry attempts (default: 3)
+   * @returns {Promise<{success: boolean, bytes?: GLib.Bytes, status?: number, error?: Error}>}
+   * @private
+   */
+  async _sendWithRetry(method, url, body = null, maxRetries = 3) {
+    let lastError = null;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const message = Soup.Message.new(method, url);
+
+        if (body !== null) {
+          message.set_request_body_from_bytes(
+            "application/json",
+            new GLib.Bytes(new TextEncoder().encode(body)),
+          );
+        }
+
+        const bytes = await this._session.send_and_read_async(
+          message,
+          GLib.PRIORITY_DEFAULT,
+          null,
+        );
+
+        const status = message.get_status();
+
+        // Success
+        if (status === Soup.Status.OK) {
+          return { success: true, bytes, status };
+        }
+
+        // Server error (5xx) - retry with backoff
+        if (status >= 500 && attempt < maxRetries - 1) {
+          const delayMs = 1000 * (attempt + 1);
+          console.error(
+            `[ElgatoLights] Server error ${status} from ${this.name}, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`,
+          );
+          await this._delay(delayMs);
+          continue;
+        }
+
+        // Non-retryable error (4xx or final 5xx)
+        return {
+          success: false,
+          status,
+          error: new Error(`HTTP ${status}`),
+        };
+      } catch (e) {
+        lastError = e;
+
+        // Network error - retry with backoff
+        if (attempt < maxRetries - 1) {
+          const delayMs = 1000 * (attempt + 1);
+          console.error(
+            `[ElgatoLights] Network error from ${this.name}: ${e.message}, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`,
+          );
+          await this._delay(delayMs);
+          continue;
+        }
+      }
+    }
+
+    return {
+      success: false,
+      error: lastError || new Error("Max retries exceeded"),
+    };
+  }
+
+  /**
    * Returns the base URL for API requests.
    *
    * @returns {string} The base URL (e.g., "http://192.168.1.100:9123")
@@ -66,20 +159,19 @@ export class ElgatoLight {
    * @returns {Promise<boolean>} True if successful, false otherwise
    */
   async fetchState() {
-    try {
-      const message = Soup.Message.new("GET", `${this.baseUrl}/elgato/lights`);
-      const bytes = await this._session.send_and_read_async(
-        message,
-        GLib.PRIORITY_DEFAULT,
-        null,
+    const url = `${this.baseUrl}/elgato/lights`;
+    const result = await this._sendWithRetry("GET", url);
+
+    if (!result.success) {
+      console.error(
+        `[ElgatoLights] Failed to fetch state from ${this.name}: ${result.error?.message}`,
       );
+      return false;
+    }
 
-      if (message.get_status() !== Soup.Status.OK) {
-        throw new Error(`HTTP ${message.get_status()}`);
-      }
-
+    try {
       const decoder = new TextDecoder("utf-8");
-      const text = decoder.decode(bytes.get_data());
+      const text = decoder.decode(result.bytes.get_data());
       const data = JSON.parse(text);
 
       if (data.lights && data.lights.length > 0) {
@@ -92,7 +184,7 @@ export class ElgatoLight {
       return true;
     } catch (e) {
       console.error(
-        `[ElgatoLights] Failed to fetch state from ${this.name}: ${e.message}`,
+        `[ElgatoLights] Failed to parse state from ${this.name}: ${e.message}`,
       );
       return false;
     }
@@ -107,23 +199,19 @@ export class ElgatoLight {
    * @returns {Promise<Object|null>} The accessory info object or null on failure
    */
   async fetchInfo() {
+    const url = `${this.baseUrl}/elgato/accessory-info`;
+    const result = await this._sendWithRetry("GET", url);
+
+    if (!result.success) {
+      console.error(
+        `[ElgatoLights] Failed to fetch info from ${this.name}: ${result.error?.message}`,
+      );
+      return null;
+    }
+
     try {
-      const message = Soup.Message.new(
-        "GET",
-        `${this.baseUrl}/elgato/accessory-info`,
-      );
-      const bytes = await this._session.send_and_read_async(
-        message,
-        GLib.PRIORITY_DEFAULT,
-        null,
-      );
-
-      if (message.get_status() !== Soup.Status.OK) {
-        throw new Error(`HTTP ${message.get_status()}`);
-      }
-
       const decoder = new TextDecoder("utf-8");
-      const text = decoder.decode(bytes.get_data());
+      const text = decoder.decode(result.bytes.get_data());
       const data = JSON.parse(text);
 
       // Store all accessory info
@@ -146,7 +234,7 @@ export class ElgatoLight {
       return data;
     } catch (e) {
       console.error(
-        `[ElgatoLights] Failed to fetch info from ${this.name}: ${e.message}`,
+        `[ElgatoLights] Failed to parse info from ${this.name}: ${e.message}`,
       );
       return null;
     }
@@ -161,123 +249,108 @@ export class ElgatoLight {
    * @returns {Promise<boolean>} True if successful, false otherwise
    */
   async setState(on, brightness, temperature) {
-    try {
-      const payload = JSON.stringify({
-        numberOfLights: 1,
-        lights: [
-          {
-            on: on ? 1 : 0,
-            brightness: Math.round(brightness),
-            temperature: Math.round(temperature),
-          },
-        ],
-      });
+    // Input validation: clamp values to valid ranges
+    brightness = Math.max(3, Math.min(100, Math.round(brightness)));
+    temperature = Math.max(143, Math.min(344, Math.round(temperature)));
 
-      const message = Soup.Message.new("PUT", `${this.baseUrl}/elgato/lights`);
-      message.set_request_body_from_bytes(
-        "application/json",
-        new GLib.Bytes(new TextEncoder().encode(payload)),
-      );
+    const payload = JSON.stringify({
+      numberOfLights: 1,
+      lights: [
+        {
+          on: on ? 1 : 0,
+          brightness,
+          temperature,
+        },
+      ],
+    });
 
-      await this._session.send_and_read_async(
-        message,
-        GLib.PRIORITY_DEFAULT,
-        null,
-      );
+    const url = `${this.baseUrl}/elgato/lights`;
+    const result = await this._sendWithRetry("PUT", url, payload);
 
-      if (message.get_status() !== Soup.Status.OK) {
-        throw new Error(`HTTP ${message.get_status()}`);
-      }
-
-      // Update local cache
-      this.on = on;
-      this.brightness = brightness;
-      this.temperature = temperature;
-
-      return true;
-    } catch (e) {
+    if (!result.success) {
       console.error(
-        `[ElgatoLights] Failed to set state on ${this.name}: ${e.message}`,
+        `[ElgatoLights] Failed to set state on ${this.name}: ${result.error?.message}`,
       );
       return false;
     }
+
+    // Update local cache
+    this.on = on;
+    this.brightness = brightness;
+    this.temperature = temperature;
+
+    return true;
   }
 
   /**
    * Sets only the on/off state without affecting brightness or temperature.
    * This preserves the light's current settings.
    *
+   * Note: This method performs a GET followed by PUT to preserve device settings.
+   * There is a small TOCTOU (time-of-check-time-of-use) window where another client
+   * (e.g., Elgato Control Center) could modify settings between these operations.
+   * This trade-off ensures we always use the device's actual current settings rather
+   * than potentially stale cached values.
+   *
    * @param {boolean} on - Whether to turn the light on or off
    * @returns {Promise<boolean>} True if successful
    */
   async setOn(on) {
+    const url = `${this.baseUrl}/elgato/lights`;
+
+    // Fetch current state to preserve brightness and temperature
+    const getResult = await this._sendWithRetry("GET", url);
+
+    if (!getResult.success) {
+      console.error(
+        `[ElgatoLights] Failed to get state from ${this.name}: ${getResult.error?.message}`,
+      );
+      return false;
+    }
+
+    let data;
     try {
-      // Fetch current state to preserve brightness and temperature
-      const getMessage = Soup.Message.new(
-        "GET",
-        `${this.baseUrl}/elgato/lights`,
-      );
-      const getBytes = await this._session.send_and_read_async(
-        getMessage,
-        GLib.PRIORITY_DEFAULT,
-        null,
-      );
-
-      if (getMessage.get_status() !== Soup.Status.OK) {
-        throw new Error(`HTTP ${getMessage.get_status()}`);
-      }
-
       const decoder = new TextDecoder("utf-8");
-      const text = decoder.decode(getBytes.get_data());
-      const data = JSON.parse(text);
+      const text = decoder.decode(getResult.bytes.get_data());
+      data = JSON.parse(text);
 
       if (!data.lights || data.lights.length === 0) {
         throw new Error("No lights in response");
       }
-
-      // Update only the on field, preserve brightness and temperature from device
-      const payload = JSON.stringify({
-        numberOfLights: 1,
-        lights: [
-          {
-            on: on ? 1 : 0,
-            brightness: data.lights[0].brightness,
-            temperature: data.lights[0].temperature,
-          },
-        ],
-      });
-
-      const putMessage = Soup.Message.new(
-        "PUT",
-        `${this.baseUrl}/elgato/lights`,
-      );
-      putMessage.set_request_body_from_bytes(
-        "application/json",
-        new GLib.Bytes(new TextEncoder().encode(payload)),
-      );
-
-      await this._session.send_and_read_async(
-        putMessage,
-        GLib.PRIORITY_DEFAULT,
-        null,
-      );
-
-      if (putMessage.get_status() !== Soup.Status.OK) {
-        throw new Error(`HTTP ${putMessage.get_status()}`);
-      }
-
-      // Update local cache with actual values from device
-      this.on = on;
-      this.brightness = data.lights[0].brightness;
-      this.temperature = data.lights[0].temperature;
-
-      return true;
     } catch (e) {
       console.error(
-        `[ElgatoLights] Failed to set on state on ${this.name}: ${e.message}`,
+        `[ElgatoLights] Failed to parse state from ${this.name}: ${e.message}`,
       );
       return false;
     }
+
+    // Update only the on field, preserve brightness and temperature from device
+    const payload = JSON.stringify({
+      numberOfLights: 1,
+      lights: [
+        {
+          on: on ? 1 : 0,
+          brightness: data.lights[0].brightness,
+          temperature: data.lights[0].temperature,
+        },
+      ],
+    });
+
+    const putResult = await this._sendWithRetry("PUT", url, payload);
+
+    if (!putResult.success) {
+      console.error(
+        `[ElgatoLights] Failed to set on state on ${this.name}: ${putResult.error?.message}`,
+      );
+      return false;
+    }
+
+    // Update local cache with actual values from device
+    this.on = on;
+    this.brightness = data.lights[0].brightness;
+    this.temperature = data.lights[0].temperature;
+
+    return true;
   }
 
   /**
