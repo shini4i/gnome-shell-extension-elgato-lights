@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   releaser-nixpkgs:
     runs-on: ubuntu-latest
