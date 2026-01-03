@@ -6,71 +6,71 @@
 
 /* Container for each light's controls */
 .elgato-light-control {
-    padding: 8px 12px;
-    spacing: 8px;
+  padding: 8px 12px;
+  spacing: 8px;
 }
 
 /* Slider rows (brightness and temperature) */
 .elgato-slider-row {
-    spacing: 8px;
+  spacing: 8px;
 }
 
 /* Icons next to sliders */
 .elgato-slider-icon {
-    margin-right: 8px;
+  margin-right: 8px;
 }
 
 /* Value labels next to sliders */
 .elgato-slider-label {
-    min-width: 48px;
-    text-align: right;
+  min-width: 48px;
+  text-align: right;
 }
 
 /* Per-light toggle button */
 .elgato-light-toggle {
-    padding: 4px 8px;
-    border-radius: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 
 /* Toggle button when light is on */
 .elgato-light-toggle.on {
-    background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Refresh button in menu header */
 .elgato-refresh-button {
-    margin-left: 8px;
+  margin-left: 8px;
 }
 
 /* Info button next to toggle */
 .elgato-info-button {
-    padding: 4px 8px;
-    border-radius: 4px;
-    margin-right: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-right: 4px;
 }
 
 /* Info panel container */
 .elgato-info-panel {
-    padding: 8px;
-    margin-top: 4px;
-    margin-bottom: 4px;
-    background-color: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
-    spacing: 4px;
+  padding: 8px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  spacing: 4px;
 }
 
 /* Info row layout */
 .elgato-info-row {
-    spacing: 8px;
+  spacing: 8px;
 }
 
 /* Info label (left side) */
 .elgato-info-label {
-    font-weight: bold;
-    min-width: 90px;
+  font-weight: bold;
+  min-width: 90px;
 }
 
 /* Info value (right side) */
 .elgato-info-value {
-    color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.7);
 }

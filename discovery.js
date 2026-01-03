@@ -5,11 +5,11 @@
  * via their advertised _elg._tcp mDNS service.
  */
 
-import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
+import Gio from "gi://Gio";
+import GLib from "gi://GLib";
 
 // Import parser from lib (testable without GI dependencies)
-import { parseAvahiOutput } from './lib/parser.js';
+import { parseAvahiOutput } from "./lib/parser.js";
 
 const AVAHI_TIMEOUT_MS = 5000;
 
@@ -24,40 +24,48 @@ const AVAHI_TIMEOUT_MS = 5000;
  * @throws {Error} If avahi-browse fails or is not installed
  */
 export async function discoverLights() {
-    return new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const proc = Gio.Subprocess.new(
+        ["avahi-browse", "-t", "-r", "-p", "_elg._tcp"],
+        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
+      );
+
+      // Set up timeout
+      const timeoutId = GLib.timeout_add(
+        GLib.PRIORITY_DEFAULT,
+        AVAHI_TIMEOUT_MS,
+        () => {
+          proc.force_exit();
+          return GLib.SOURCE_REMOVE;
+        },
+      );
+
+      proc.communicate_utf8_async(null, null, (proc, result) => {
+        GLib.source_remove(timeoutId);
+
         try {
-            const proc = Gio.Subprocess.new(
-                ['avahi-browse', '-t', '-r', '-p', '_elg._tcp'],
-                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
-            );
+          const [ok, stdout, _stderr] = proc.communicate_utf8_finish(result);
 
-            // Set up timeout
-            const timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, AVAHI_TIMEOUT_MS, () => {
-                proc.force_exit();
-                return GLib.SOURCE_REMOVE;
-            });
+          if (!ok) {
+            reject(new Error("avahi-browse failed"));
+            return;
+          }
 
-            proc.communicate_utf8_async(null, null, (proc, result) => {
-                GLib.source_remove(timeoutId);
-
-                try {
-                    const [ok, stdout, stderr] = proc.communicate_utf8_finish(result);
-
-                    if (!ok) {
-                        reject(new Error('avahi-browse failed'));
-                        return;
-                    }
-
-                    const lights = parseAvahiOutput(stdout);
-                    resolve(lights);
-                } catch (e) {
-                    reject(e);
-                }
-            });
+          const lights = parseAvahiOutput(stdout);
+          resolve(lights);
         } catch (e) {
-            reject(new Error(`Failed to run avahi-browse: ${e.message}. Is avahi-tools installed?`));
+          reject(e);
         }
-    });
+      });
+    } catch (e) {
+      reject(
+        new Error(
+          `Failed to run avahi-browse: ${e.message}. Is avahi-tools installed?`,
+        ),
+      );
+    }
+  });
 }
 
 /**
@@ -69,14 +77,14 @@ export async function discoverLights() {
  * @returns {boolean} True if avahi-browse is available, false otherwise
  */
 export function isAvahiAvailable() {
-    try {
-        const proc = Gio.Subprocess.new(
-            ['which', 'avahi-browse'],
-            Gio.SubprocessFlags.STDOUT_PIPE
-        );
-        proc.wait(null);
-        return proc.get_successful();
-    } catch (e) {
-        return false;
-    }
+  try {
+    const proc = Gio.Subprocess.new(
+      ["which", "avahi-browse"],
+      Gio.SubprocessFlags.STDOUT_PIPE,
+    );
+    proc.wait(null);
+    return proc.get_successful();
+  } catch (_e) {
+    return false;
+  }
 }

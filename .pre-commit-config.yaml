@@ -1,0 +1,15 @@
+repos:
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: npm run lint
+        language: system
+        types: [javascript]
+        pass_filenames: false
+
+      - id: prettier
+        name: prettier
+        entry: npx prettier --write
+        language: system
+        types_or: [javascript, json, yaml, markdown, css]

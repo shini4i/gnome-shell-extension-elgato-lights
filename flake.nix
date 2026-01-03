@@ -10,6 +10,12 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+
+        # Wrap bump-my-version to isolate its Python environment
+        # This prevents it from polluting PYTHONPATH and breaking other Python tools (e.g., serena MCP)
+        bump-my-version-wrapped = pkgs.writeShellScriptBin "bump-my-version" ''
+          exec ${pkgs.bump-my-version}/bin/bump-my-version "$@"
+        '';
       in
       {
         devShells.default = pkgs.mkShell {
@@ -33,6 +39,15 @@
 
             # TypeScript for type checking (optional, useful for GJS)
             typescript
+
+            # An automation for bumping version in the project (wrapped to isolate Python env)
+            bump-my-version-wrapped
+
+            # Task runner
+            go-task
+
+            # Pre-commit hooks
+            pre-commit
           ];
 
           shellHook = ''
