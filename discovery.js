@@ -131,21 +131,20 @@ export function discoverLights(platform = platformDefaults) {
       }
       freedResolvers.add(resolverPath);
 
-      bus
-        .call(
-          AVAHI_BUS_NAME,
-          resolverPath,
-          AVAHI_SERVICE_RESOLVER_IFACE,
-          "Free",
-          null,
-          null,
-          platform.DbusCallFlags.NONE,
-          -1,
-          null,
-        )
-        .catch(() => {
-          // Ignore errors during cleanup
-        });
+      bus.call(
+        AVAHI_BUS_NAME,
+        resolverPath,
+        AVAHI_SERVICE_RESOLVER_IFACE,
+        "Free",
+        null,
+        null,
+        platform.DbusCallFlags.NONE,
+        -1,
+        null,
+        () => {
+          // Ignore errors during cleanup - callback required for async D-Bus call
+        },
+      );
     };
 
     /**
@@ -194,21 +193,20 @@ export function discoverLights(platform = platformDefaults) {
 
       // Free the browser if created
       if (bus && browserPath) {
-        bus
-          .call(
-            AVAHI_BUS_NAME,
-            browserPath,
-            AVAHI_SERVICE_BROWSER_IFACE,
-            "Free",
-            null,
-            null,
-            platform.DbusCallFlags.NONE,
-            -1,
-            null,
-          )
-          .catch(() => {
-            // Ignore errors during cleanup
-          });
+        bus.call(
+          AVAHI_BUS_NAME,
+          browserPath,
+          AVAHI_SERVICE_BROWSER_IFACE,
+          "Free",
+          null,
+          null,
+          platform.DbusCallFlags.NONE,
+          -1,
+          null,
+          () => {
+            // Ignore errors during cleanup - callback required for async D-Bus call
+          },
+        );
         browserPath = null;
       }
     };

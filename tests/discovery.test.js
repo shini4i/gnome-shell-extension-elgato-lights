@@ -92,8 +92,12 @@ function createMockBus(options = {}) {
             });
           }
         } else if (method === "Free") {
-          // Free calls return a promise-like object
-          return Promise.resolve();
+          // Free calls use callback pattern like other D-Bus methods
+          if (callback) {
+            setImmediate(() => {
+              callback(bus, null);
+            });
+          }
         }
       },
     ),
