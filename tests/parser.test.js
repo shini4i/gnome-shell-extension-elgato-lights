@@ -25,9 +25,7 @@ describe("decodeAvahiString", () => {
   });
 
   it("decodes multiple escape sequences", () => {
-    expect(decodeAvahiString("Elgato\\032Key\\032Light\\03244CB")).toBe(
-      "Elgato Key Light 44CB",
-    );
+    expect(decodeAvahiString("Elgato\\032Key\\032Light\\03244CB")).toBe("Elgato Key Light 44CB");
   });
 
   it("handles empty string", () => {
@@ -121,10 +119,7 @@ malformed line
     const result = parseAvahiOutput(output);
 
     expect(result).toHaveLength(2);
-    expect(result.map((l) => l.host)).toEqual([
-      "192.168.1.100",
-      "192.168.1.101",
-    ]);
+    expect(result.map((l) => l.host)).toEqual(["192.168.1.100", "192.168.1.101"]);
   });
 });
 
@@ -149,33 +144,21 @@ describe("isValidLightConfig", () => {
   });
 
   it("returns false for empty name", () => {
-    expect(
-      isValidLightConfig({ name: "", host: "192.168.1.100", port: 9123 }),
-    ).toBe(false);
+    expect(isValidLightConfig({ name: "", host: "192.168.1.100", port: 9123 })).toBe(false);
   });
 
   it("returns false for non-string name", () => {
-    expect(
-      isValidLightConfig({ name: 123, host: "192.168.1.100", port: 9123 }),
-    ).toBe(false);
+    expect(isValidLightConfig({ name: 123, host: "192.168.1.100", port: 9123 })).toBe(false);
   });
 
   it("returns false for empty host", () => {
-    expect(isValidLightConfig({ name: "Test", host: "", port: 9123 })).toBe(
-      false,
-    );
+    expect(isValidLightConfig({ name: "Test", host: "", port: 9123 })).toBe(false);
   });
 
   it("returns false for invalid port", () => {
-    expect(
-      isValidLightConfig({ name: "Test", host: "192.168.1.100", port: 0 }),
-    ).toBe(false);
-    expect(
-      isValidLightConfig({ name: "Test", host: "192.168.1.100", port: -1 }),
-    ).toBe(false);
-    expect(
-      isValidLightConfig({ name: "Test", host: "192.168.1.100", port: 70000 }),
-    ).toBe(false);
+    expect(isValidLightConfig({ name: "Test", host: "192.168.1.100", port: 0 })).toBe(false);
+    expect(isValidLightConfig({ name: "Test", host: "192.168.1.100", port: -1 })).toBe(false);
+    expect(isValidLightConfig({ name: "Test", host: "192.168.1.100", port: 70000 })).toBe(false);
     expect(
       isValidLightConfig({
         name: "Test",
@@ -186,12 +169,8 @@ describe("isValidLightConfig", () => {
   });
 
   it("accepts valid port range (1-65535)", () => {
-    expect(
-      isValidLightConfig({ name: "Test", host: "192.168.1.100", port: 1 }),
-    ).toBe(true);
-    expect(
-      isValidLightConfig({ name: "Test", host: "192.168.1.100", port: 65535 }),
-    ).toBe(true);
+    expect(isValidLightConfig({ name: "Test", host: "192.168.1.100", port: 1 })).toBe(true);
+    expect(isValidLightConfig({ name: "Test", host: "192.168.1.100", port: 65535 })).toBe(true);
   });
 });
 
