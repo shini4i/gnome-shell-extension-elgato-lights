@@ -493,6 +493,114 @@ describe("discoverLights", () => {
     expect(platform.removeTimeout).toHaveBeenCalled();
   });
 
+  it("guards against duplicate Found signal delivery", async () => {
+    // This tests that duplicate Found signals don't cause pendingResolvers underflow
+    const platform = createMockPlatform();
+    const promise = discoverLights(platform);
+    await wait();
+
+    const browserPath = "/test/browser/1";
+
+    platform.bus._emitSignal(AVAHI_SERVICE_BROWSER_IFACE, "ItemNew", browserPath, [
+      1,
+      0,
+      "Light 1",
+      ELGATO_SERVICE_TYPE,
+      "local",
+      0,
+    ]);
+
+    await wait();
+    const resolverPath = platform.bus._getLastResolverPath();
+
+    // Emit Found signal TWICE (simulating duplicate delivery)
+    const foundParams = [
+      1,
+      0,
+      "Light 1",
+      ELGATO_SERVICE_TYPE,
+      "local",
+      "host.local",
+      0,
+      "192.168.1.100",
+      9123,
+      [],
+      0,
+    ];
+    platform.bus._emitSignal(AVAHI_SERVICE_RESOLVER_IFACE, "Found", resolverPath, foundParams);
+    platform.bus._emitSignal(AVAHI_SERVICE_RESOLVER_IFACE, "Found", resolverPath, foundParams);
+
+    platform.bus._emitSignal(AVAHI_SERVICE_BROWSER_IFACE, "AllForNow", browserPath, []);
+
+    const result = await promise;
+    // Should have exactly 1 light (not 0 from underflow or 2 from duplicate adds)
+    expect(result).toHaveLength(1);
+    expect(result[0].host).toBe("192.168.1.100");
+  });
+
+  it("handles resolver creation failure and still completes correctly", async () => {
+    // This tests the error handling path when ServiceResolverNew fails
+    const platform = createMockPlatform();
+
+    // Override bus.call to fail on ServiceResolverNew
+    const originalCall = platform.bus.call;
+    let firstResolverFailed = false;
+    platform.bus.call = vi.fn(
+      (busName, path, iface, method, args, replyType, flags, timeout, cancellable, callback) => {
+        if (method === "ServiceResolverNew" && !firstResolverFailed) {
+          firstResolverFailed = true;
+          setImmediate(() => {
+            // Simulate call_finish throwing an error
+            const mockResult = {
+              call_finish: () => {
+                throw new Error("Resolver creation failed");
+              },
+            };
+            callback(platform.bus, mockResult);
+          });
+          return;
+        }
+        return originalCall.call(
+          platform.bus,
+          busName,
+          path,
+          iface,
+          method,
+          args,
+          replyType,
+          flags,
+          timeout,
+          cancellable,
+          callback,
+        );
+      },
+    );
+
+    const promise = discoverLights(platform);
+    await wait();
+
+    const browserPath = "/test/browser/1";
+
+    // Emit ItemNew for a light (will fail resolver creation)
+    platform.bus._emitSignal(AVAHI_SERVICE_BROWSER_IFACE, "ItemNew", browserPath, [
+      1,
+      0,
+      "Light 1",
+      ELGATO_SERVICE_TYPE,
+      "local",
+      0,
+    ]);
+
+    await wait();
+
+    // Emit AllForNow
+    platform.bus._emitSignal(AVAHI_SERVICE_BROWSER_IFACE, "AllForNow", browserPath, []);
+
+    // Should complete with no lights (resolver creation failed)
+    const result = await promise;
+    expect(result).toEqual([]);
+  });
+
   it("handles resolver failure gracefully", async () => {
     const platform = createMockPlatform();
 
@@ -529,6 +637,106 @@ describe("discoverLights", () => {
     const result = await promise;
 
     // Should complete without error, just with no lights
+    expect(result).toEqual([]);
+  });
+
+  it("waits for all resolvers when AllForNow fires before Found signals", async () => {
+    // This tests the race condition fix - AllForNow can fire before resolvers complete
+    const platform = createMockPlatform();
+
+    const promise = discoverLights(platform);
+
+    await wait();
+
+    const browserPath = "/test/browser/1";
+
+    // Emit ItemNew for two lights
+    platform.bus._emitSignal(AVAHI_SERVICE_BROWSER_IFACE, "ItemNew", browserPath, [
+      1,
+      0,
+      "Light 1",
+      ELGATO_SERVICE_TYPE,
+      "local",
+      0,
+    ]);
+
+    await wait();
+    const resolver1 = platform.bus._getLastResolverPath();
+
+    platform.bus._emitSignal(AVAHI_SERVICE_BROWSER_IFACE, "ItemNew", browserPath, [
+      1,
+      0,
+      "Light 2",
+      ELGATO_SERVICE_TYPE,
+      "local",
+      0,
+    ]);
+
+    await wait();
+    const resolver2 = platform.bus._getLastResolverPath();
+
+    // AllForNow fires BEFORE any Found signals (the race condition)
+    platform.bus._emitSignal(AVAHI_SERVICE_BROWSER_IFACE, "AllForNow", browserPath, []);
+
+    await wait();
+
+    // Now the Found signals arrive (after AllForNow)
+    platform.bus._emitSignal(AVAHI_SERVICE_RESOLVER_IFACE, "Found", resolver1, [
+      1,
+      0,
+      "Light 1",
+      ELGATO_SERVICE_TYPE,
+      "local",
+      "host1.local",
+      0,
+      "192.168.1.100",
+      9123,
+      [],
+      0,
+    ]);
+
+    await wait();
+
+    platform.bus._emitSignal(AVAHI_SERVICE_RESOLVER_IFACE, "Found", resolver2, [
+      1,
+      0,
+      "Light 2",
+      ELGATO_SERVICE_TYPE,
+      "local",
+      "host2.local",
+      0,
+      "192.168.1.101",
+      9123,
+      [],
+      0,
+    ]);
+
+    await wait();
+
+    const result = await promise;
+
+    // Both lights should be found despite AllForNow firing first
+    expect(result).toHaveLength(2);
+    expect(result.map((l) => l.host)).toContain("192.168.1.100");
+    expect(result.map((l) => l.host)).toContain("192.168.1.101");
+  });
+
+  it("completes immediately when AllForNow fires with no pending resolvers", async () => {
+    // Test that discovery completes quickly when there are no services
+    const platform = createMockPlatform();
+
+    const promise = discoverLights(platform);
+
+    await wait();
+
+    const browserPath = "/test/browser/1";
+
+    // AllForNow fires with no ItemNew signals (no services found)
+    platform.bus._emitSignal(AVAHI_SERVICE_BROWSER_IFACE, "AllForNow", browserPath, []);
+
+    // Should complete immediately without needing timeouts
+    const result = await promise;
+
     expect(result).toEqual([]);
   });
 

@@ -16,7 +16,6 @@ export const AVAHI_SERVICE_RESOLVER_IFACE = "org.freedesktop.Avahi.ServiceResolv
 
 export const ELGATO_SERVICE_TYPE = "_elg._tcp";
 export const DISCOVERY_TIMEOUT_MS = 5000;
-export const RESOLVER_GRACE_PERIOD_MS = 500;
 
 // Avahi constants
 export const AVAHI_IF_UNSPEC = -1;
@@ -114,10 +113,12 @@ export function discoverLights(platform = platformDefaults) {
     const resolverSignalIds = [];
     const resolverPaths = new Set();
     const freedResolvers = new Set();
+    const completedResolvers = new Set();
     let timeoutId = null;
-    let resolverGraceTimeoutId = null;
     let bus = null;
     let completed = false;
+    let allForNowReceived = false;
+    let pendingResolvers = 0;
 
     /**
      * Frees a resolver if not already freed.
@@ -148,17 +149,23 @@ export function discoverLights(platform = platformDefaults) {
     };
 
     /**
+     * Checks if discovery should complete and triggers completion if ready.
+     * Discovery completes when AllForNow has been received and all pending
+     * resolvers have finished (either Found or Failure).
+     */
+    const checkCompletion = () => {
+      if (allForNowReceived && pendingResolvers === 0) {
+        complete();
+      }
+    };
+
+    /**
      * Cleans up all D-Bus subscriptions and resources.
      */
     const cleanup = () => {
       if (timeoutId) {
         platform.removeTimeout(timeoutId);
         timeoutId = null;
-      }
-
-      if (resolverGraceTimeoutId) {
-        platform.removeTimeout(resolverGraceTimeoutId);
-        resolverGraceTimeoutId = null;
       }
 
       if (bus) {
@@ -271,6 +278,9 @@ export function discoverLights(platform = platformDefaults) {
               (_conn, _sender, _path, _iface, _signal, params) => {
                 const [iface, protocol, name, type, domain] = params.recursiveUnpack();
 
+                // Track that we're starting a resolver operation
+                pendingResolvers++;
+
                 // Create a resolver for this service
                 bus.call(
                   AVAHI_BUS_NAME,
@@ -307,6 +317,12 @@ export function discoverLights(platform = platformDefaults) {
                         null,
                         platform.DbusSignalFlags.NONE,
                         (_conn, _sender, _path, _iface, _signal, foundParams) => {
+                          // Guard against duplicate signal delivery
+                          if (completedResolvers.has(resolverPath)) {
+                            return;
+                          }
+                          completedResolvers.add(resolverPath);
+
                           const unpacked = foundParams.recursiveUnpack();
                           // Found signal: (iissssisqaayu)
                           // interface, protocol, name, type, domain, host, aprotocol, address, port, txt, flags
@@ -325,6 +341,8 @@ export function discoverLights(platform = platformDefaults) {
                           }
 
                           freeResolver(resolverPath);
+                          pendingResolvers--;
+                          checkCompletion();
                         },
                       );
                       resolverSignalIds.push(foundSignalId);
@@ -338,12 +356,22 @@ export function discoverLights(platform = platformDefaults) {
                         null,
                         platform.DbusSignalFlags.NONE,
                         () => {
+                          // Guard against duplicate signal delivery
+                          if (completedResolvers.has(resolverPath)) {
+                            return;
+                          }
+                          completedResolvers.add(resolverPath);
+
                           freeResolver(resolverPath);
+                          pendingResolvers--;
+                          checkCompletion();
                         },
                       );
                       resolverSignalIds.push(resolverFailureId);
                     } catch (e) {
                       console.error(`[ElgatoLights] Failed to create resolver: ${e.message}`);
+                      pendingResolvers--;
+                      checkCompletion();
                     }
                   },
                 );
@@ -359,17 +387,10 @@ export function discoverLights(platform = platformDefaults) {
               null,
               platform.DbusSignalFlags.NONE,
               () => {
-                // Cancel any pending grace timeout to prevent leaks on repeated signals
-                if (resolverGraceTimeoutId) {
-                  platform.removeTimeout(resolverGraceTimeoutId);
-                  resolverGraceTimeoutId = null;
-                }
-                // Give resolvers a moment to complete, then finish
-                resolverGraceTimeoutId = platform.createTimeout(RESOLVER_GRACE_PERIOD_MS, () => {
-                  resolverGraceTimeoutId = null;
-                  complete();
-                  return false; // GLib.SOURCE_REMOVE
-                });
+                // Mark that Avahi has finished browsing for services
+                allForNowReceived = true;
+                // Complete if all resolvers have finished, otherwise wait for them
+                checkCompletion();
               },
             );
 
