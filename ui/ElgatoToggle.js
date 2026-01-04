@@ -193,14 +193,19 @@ const ElgatoToggle = GObject.registerClass(
 
     /**
      * Refreshes the state of all discovered lights from their devices.
+     * Uses Promise.allSettled to allow partial updates when some lights are unreachable.
      */
     async _refreshLightStates() {
       const promises = this._lights.map(async (light) => {
-        await light.fetchInfo();
-        await light.fetchState();
+        try {
+          await light.fetchInfo();
+          await light.fetchState();
+        } catch (e) {
+          console.error(`[ElgatoLights] Failed to refresh ${light.name}: ${e.message}`);
+        }
       });
 
-      await Promise.all(promises);
+      await Promise.allSettled(promises);
       this._updateUI();
     }
 
@@ -280,31 +285,32 @@ const ElgatoToggle = GObject.registerClass(
 
     /**
      * Handles main toggle click - turns all lights on or off.
+     * Uses Promise.allSettled to allow partial success when some lights are unreachable.
      */
     async _onToggleClicked() {
       if (this._lights.length === 0) {
         return;
       }
 
-      try {
-        // If any light is on, turn all off. Otherwise turn all on.
-        const anyOn = this._lights.some((l) => l.on);
-        const targetState = !anyOn;
+      // If any light is on, turn all off. Otherwise turn all on.
+      const anyOn = this._lights.some((l) => l.on);
+      const targetState = !anyOn;
 
-        const promises = this._lights.map((light) =>
-          targetState ? light.turnOn() : light.turnOff(),
-        );
-
-        await Promise.all(promises);
-
-        // Update UI
-        for (const item of this._lightItems) {
-          item.updateState();
+      const promises = this._lights.map(async (light) => {
+        try {
+          return targetState ? await light.turnOn() : await light.turnOff();
+        } catch (e) {
+          console.error(`[ElgatoLights] Failed to toggle ${light.name}: ${e.message}`);
         }
-        this._updateToggleState();
-      } catch (e) {
-        console.error(`[ElgatoLights] Failed to toggle lights: ${e.message}`);
+      });
+
+      await Promise.allSettled(promises);
+
+      // Update UI for all lights (including those that succeeded)
+      for (const item of this._lightItems) {
+        item.updateState();
       }
+      this._updateToggleState();
     }
 
     /**
