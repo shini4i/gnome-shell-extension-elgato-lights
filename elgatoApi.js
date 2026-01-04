@@ -91,11 +91,7 @@ export class ElgatoLight {
           );
         }
 
-        const bytes = await this._session.send_and_read_async(
-          message,
-          GLib.PRIORITY_DEFAULT,
-          null,
-        );
+        const bytes = await this._session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null);
 
         const status = message.get_status();
 
@@ -183,9 +179,7 @@ export class ElgatoLight {
 
       return true;
     } catch (e) {
-      console.error(
-        `[ElgatoLights] Failed to parse state from ${this.name}: ${e.message}`,
-      );
+      console.error(`[ElgatoLights] Failed to parse state from ${this.name}: ${e.message}`);
       return false;
     }
   }
@@ -233,9 +227,7 @@ export class ElgatoLight {
 
       return data;
     } catch (e) {
-      console.error(
-        `[ElgatoLights] Failed to parse info from ${this.name}: ${e.message}`,
-      );
+      console.error(`[ElgatoLights] Failed to parse info from ${this.name}: ${e.message}`);
       return null;
     }
   }
@@ -268,9 +260,7 @@ export class ElgatoLight {
     const result = await this._sendWithRetry("PUT", url, payload);
 
     if (!result.success) {
-      console.error(
-        `[ElgatoLights] Failed to set state on ${this.name}: ${result.error?.message}`,
-      );
+      console.error(`[ElgatoLights] Failed to set state on ${this.name}: ${result.error?.message}`);
       return false;
     }
 
@@ -318,9 +308,7 @@ export class ElgatoLight {
         throw new Error("No lights in response");
       }
     } catch (e) {
-      console.error(
-        `[ElgatoLights] Failed to parse state from ${this.name}: ${e.message}`,
-      );
+      console.error(`[ElgatoLights] Failed to parse state from ${this.name}: ${e.message}`);
       return false;
     }
 

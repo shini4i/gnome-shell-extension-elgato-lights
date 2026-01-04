@@ -32,14 +32,10 @@ export async function discoverLights() {
       );
 
       // Set up timeout
-      const timeoutId = GLib.timeout_add(
-        GLib.PRIORITY_DEFAULT,
-        AVAHI_TIMEOUT_MS,
-        () => {
-          proc.force_exit();
-          return GLib.SOURCE_REMOVE;
-        },
-      );
+      const timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, AVAHI_TIMEOUT_MS, () => {
+        proc.force_exit();
+        return GLib.SOURCE_REMOVE;
+      });
 
       proc.communicate_utf8_async(null, null, (proc, result) => {
         GLib.source_remove(timeoutId);
@@ -59,11 +55,7 @@ export async function discoverLights() {
         }
       });
     } catch (e) {
-      reject(
-        new Error(
-          `Failed to run avahi-browse: ${e.message}. Is avahi-tools installed?`,
-        ),
-      );
+      reject(new Error(`Failed to run avahi-browse: ${e.message}. Is avahi-tools installed?`));
     }
   });
 }
@@ -79,10 +71,7 @@ export async function discoverLights() {
 export async function isAvahiAvailable() {
   return new Promise((resolve) => {
     try {
-      const proc = Gio.Subprocess.new(
-        ["which", "avahi-browse"],
-        Gio.SubprocessFlags.STDOUT_PIPE,
-      );
+      const proc = Gio.Subprocess.new(["which", "avahi-browse"], Gio.SubprocessFlags.STDOUT_PIPE);
       proc.wait_async(null, (proc, result) => {
         try {
           proc.wait_finish(result);
