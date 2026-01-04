@@ -46,6 +46,9 @@ const LightControlItem = GObject.registerClass(
       // Track signals for cleanup
       this._signals = [];
 
+      // Flag to track destroyed state for async operation safety
+      this._destroyed = false;
+
       // Main container
       const box = new St.BoxLayout({
         vertical: true,
@@ -199,12 +202,17 @@ const LightControlItem = GObject.registerClass(
      * Handles toggle button click.
      */
     async _onToggleClicked() {
+      if (this._destroyed) return;
+
       try {
         await this._light.toggle();
+        if (this._destroyed) return;
         this.updateState();
         this._onChanged?.();
       } catch (e) {
-        console.error(`[ElgatoLights] Failed to toggle light: ${e.message}`);
+        if (!this._destroyed) {
+          console.error(`[ElgatoLights] Failed to toggle light: ${e.message}`);
+        }
       }
     }
 
@@ -268,6 +276,7 @@ const LightControlItem = GObject.registerClass(
         GLib.source_remove(this._brightnessTimeout);
       }
       this._brightnessTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+        if (this._destroyed) return GLib.SOURCE_REMOVE;
         this._light.setBrightness(brightness).catch((e) => {
           console.error(`[ElgatoLights] Failed to set brightness: ${e.message}`);
         });
@@ -292,6 +301,7 @@ const LightControlItem = GObject.registerClass(
         GLib.source_remove(this._tempTimeout);
       }
       this._tempTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+        if (this._destroyed) return GLib.SOURCE_REMOVE;
         this._light.setTemperature(temp).catch((e) => {
           console.error(`[ElgatoLights] Failed to set temperature: ${e.message}`);
         });
@@ -304,6 +314,9 @@ const LightControlItem = GObject.registerClass(
      * Cleans up resources when the item is destroyed.
      */
     destroy() {
+      // Mark as destroyed to stop in-flight async operations
+      this._destroyed = true;
+
       // Disconnect tracked signals
       for (const signal of this._signals) {
         signal.obj.disconnect(signal.id);

@@ -21,6 +21,9 @@ import { parseCachedLights } from "../lib/parser.js";
 import { getLightbulbIcon } from "./icons.js";
 import { LightControlItem } from "./LightControlItem.js";
 
+/** GSettings key for cached light configurations. */
+const CACHED_LIGHTS_KEY = "cached-lights";
+
 const ElgatoToggle = GObject.registerClass(
   class ElgatoToggle extends QuickSettings.QuickMenuToggle {
     /**
@@ -51,6 +54,12 @@ const ElgatoToggle = GObject.registerClass(
 
       // Track signal IDs for cleanup
       this._signalIds = [];
+
+      // Flag to prevent concurrent discovery operations
+      this._isDiscovering = false;
+
+      // Flag to track destroyed state for async operation safety
+      this._destroyed = false;
 
       // Menu header with refresh button
       this.menu.setHeader(this._iconOff, _("Elgato Lights"), _("Control your Key Lights"));
@@ -93,11 +102,20 @@ const ElgatoToggle = GObject.registerClass(
      * @private
      */
     async _initializeAsync() {
+      if (this._isDiscovering || this._destroyed) {
+        return;
+      }
+      this._isDiscovering = true;
       try {
         await this._loadCachedLights();
+        if (this._destroyed) return;
         await this._discoverLights();
       } catch (e) {
-        console.error(`[ElgatoLights] Initialization failed: ${e.message}`);
+        if (!this._destroyed) {
+          console.error(`[ElgatoLights] Initialization failed: ${e.message}`);
+        }
+      } finally {
+        this._isDiscovering = false;
       }
     }
 
@@ -106,7 +124,7 @@ const ElgatoToggle = GObject.registerClass(
      * Fetches current state from each light to display actual values.
      */
     async _loadCachedLights() {
-      const cached = this._settings.get_string("cached-lights");
+      const cached = this._settings.get_string(CACHED_LIGHTS_KEY);
       const lightsData = parseCachedLights(cached);
 
       if (lightsData.length > 0) {
@@ -125,7 +143,7 @@ const ElgatoToggle = GObject.registerClass(
           host: l.host,
           port: l.port,
         }));
-        this._settings.set_string("cached-lights", JSON.stringify(data));
+        this._settings.set_string(CACHED_LIGHTS_KEY, JSON.stringify(data));
       } catch (e) {
         console.error(`[ElgatoLights] Failed to save cached lights: ${e.message}`);
       }
@@ -157,15 +175,21 @@ const ElgatoToggle = GObject.registerClass(
      * Performs mDNS discovery to find Elgato lights on the network.
      */
     async _discoverLights() {
+      if (this._destroyed) return;
+
       this._statusItem.label.text = _("Discovering...");
 
       try {
         if (!(await isAvahiAvailable())) {
+          if (this._destroyed) return;
           this._statusItem.label.text = _("avahi-tools not installed");
           return;
         }
 
+        if (this._destroyed) return;
         const discovered = await discoverLights();
+
+        if (this._destroyed) return;
 
         if (discovered.length === 0) {
           this._statusItem.label.text = _("No lights found");
@@ -179,8 +203,10 @@ const ElgatoToggle = GObject.registerClass(
         // Fetch actual state and display names
         await this._refreshLightStates();
       } catch (e) {
-        console.error(`[ElgatoLights] Discovery failed: ${e.message}`);
-        this._statusItem.label.text = _("Discovery failed");
+        if (!this._destroyed) {
+          console.error(`[ElgatoLights] Discovery failed: ${e.message}`);
+          this._statusItem.label.text = _("Discovery failed");
+        }
       }
     }
 
@@ -189,6 +215,8 @@ const ElgatoToggle = GObject.registerClass(
      * Uses Promise.allSettled to allow partial updates when some lights are unreachable.
      */
     async _refreshLightStates() {
+      if (this._destroyed) return;
+
       const promises = this._lights.map(async (light) => {
         try {
           await light.fetchInfo();
@@ -199,7 +227,9 @@ const ElgatoToggle = GObject.registerClass(
       });
 
       await Promise.allSettled(promises);
-      this._updateUI();
+      if (!this._destroyed) {
+        this._updateUI();
+      }
     }
 
     /**
@@ -281,7 +311,7 @@ const ElgatoToggle = GObject.registerClass(
      * Uses Promise.allSettled to allow partial success when some lights are unreachable.
      */
     async _onToggleClicked() {
-      if (this._lights.length === 0) {
+      if (this._destroyed || this._lights.length === 0) {
         return;
       }
 
@@ -299,6 +329,8 @@ const ElgatoToggle = GObject.registerClass(
 
       await Promise.allSettled(promises);
 
+      if (this._destroyed) return;
+
       // Update UI for all lights (including those that succeeded)
       for (const item of this._lightItems) {
         item.updateState();
@@ -311,15 +343,22 @@ const ElgatoToggle = GObject.registerClass(
      * Disables the button during discovery to prevent concurrent operations.
      */
     async _onRefreshClicked() {
+      if (this._isDiscovering || this._destroyed) {
+        return;
+      }
+      this._isDiscovering = true;
       if (this._refreshButton) {
         this._refreshButton.reactive = false;
       }
       try {
         await this._discoverLights();
       } catch (e) {
-        console.error(`[ElgatoLights] Failed to refresh lights: ${e.message}`);
+        if (!this._destroyed) {
+          console.error(`[ElgatoLights] Failed to refresh lights: ${e.message}`);
+        }
       } finally {
-        if (this._refreshButton) {
+        this._isDiscovering = false;
+        if (!this._destroyed && this._refreshButton) {
           this._refreshButton.reactive = true;
         }
       }
@@ -329,6 +368,9 @@ const ElgatoToggle = GObject.registerClass(
      * Cleans up resources when the toggle is destroyed.
      */
     destroy() {
+      // Mark as destroyed to stop in-flight async operations
+      this._destroyed = true;
+
       // Disconnect tracked signals
       for (const id of this._signalIds) {
         this.disconnect(id);
