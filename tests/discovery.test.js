@@ -120,9 +120,14 @@ function createMockBus(options = {}) {
     }),
 
     // Helper to emit a signal for testing
+    // Matches handlers with exact path OR null path (wildcard subscription)
     _emitSignal: (iface, signal, path, params) => {
       for (const [, entry] of signalHandlers) {
-        if (entry.iface === iface && entry.signal === signal && entry.path === path) {
+        if (
+          entry.iface === iface &&
+          entry.signal === signal &&
+          (entry.path === path || entry.path === null)
+        ) {
           entry.handler(bus, AVAHI_BUS_NAME, path, iface, signal, createMockVariant(params));
         }
       }
@@ -789,6 +794,183 @@ describe("discoverLights", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].host).toBe("192.168.1.100");
+  });
+
+  it("handles Found signal arriving before resolver path is registered (race condition)", async () => {
+    // This tests the resolver signal buffering - Found signal arrives before
+    // the ServiceResolverNew callback completes and adds the path to resolverPaths
+    const platform = createMockPlatform();
+
+    // Override bus.call to emit Found signal BEFORE the resolver callback runs
+    const originalCall = platform.bus.call;
+    let deferredResolverCallback = null;
+    const raceResolverPath = "/test/resolver/race";
+
+    platform.bus.call = vi.fn(
+      (busName, path, iface, method, args, replyType, flags, timeout, cancellable, callback) => {
+        if (method === "ServiceResolverNew" && !deferredResolverCallback) {
+          // Emit Found signal IMMEDIATELY (before callback runs)
+          // This simulates the race condition where Avahi resolves instantly
+          setImmediate(() => {
+            platform.bus._emitSignal(AVAHI_SERVICE_RESOLVER_IFACE, "Found", raceResolverPath, [
+              1,
+              0,
+              "Race Light",
+              ELGATO_SERVICE_TYPE,
+              "local",
+              "host.local",
+              0,
+              "192.168.1.200",
+              9123,
+              [],
+              0,
+            ]);
+          });
+
+          // Store callback for later execution (simulating slow D-Bus response)
+          deferredResolverCallback = () => {
+            callback(platform.bus, createMockVariant([raceResolverPath]));
+          };
+          return;
+        }
+        return originalCall.call(
+          platform.bus,
+          busName,
+          path,
+          iface,
+          method,
+          args,
+          replyType,
+          flags,
+          timeout,
+          cancellable,
+          callback,
+        );
+      },
+    );
+
+    const promise = discoverLights(platform);
+    await wait();
+
+    const browserPath = "/test/browser/1";
+
+    // Emit ItemNew to trigger resolver creation
+    platform.bus._emitSignal(AVAHI_SERVICE_BROWSER_IFACE, "ItemNew", browserPath, [
+      1,
+      0,
+      "Race Light",
+      ELGATO_SERVICE_TYPE,
+      "local",
+      0,
+    ]);
+
+    // Wait for Found signal to be emitted (and buffered)
+    await wait(50);
+
+    // Now let the resolver registration complete (after signal was buffered)
+    deferredResolverCallback();
+
+    await wait();
+
+    // Emit AllForNow
+    platform.bus._emitSignal(AVAHI_SERVICE_BROWSER_IFACE, "AllForNow", browserPath, []);
+
+    await wait();
+
+    const result = await promise;
+
+    // Light should be found despite race condition
+    expect(result).toHaveLength(1);
+    expect(result[0].host).toBe("192.168.1.200");
+    expect(result[0].name).toBe("Race Light");
+  });
+
+  it("handles browser signals arriving before browser path is known (buffering)", async () => {
+    // This tests browser signal buffering when ItemNew/AllForNow arrive before
+    // ServiceBrowserNew callback completes
+    const platform = createMockPlatform();
+
+    // Override bus.call to emit browser signals BEFORE the callback runs
+    const originalCall = platform.bus.call;
+    let deferredBrowserCallback = null;
+    const browserPath = "/test/browser/buffered";
+
+    platform.bus.call = vi.fn(
+      (busName, path, iface, method, args, replyType, flags, timeout, cancellable, callback) => {
+        if (method === "ServiceBrowserNew" && !deferredBrowserCallback) {
+          // Emit ItemNew and AllForNow IMMEDIATELY before callback runs
+          setImmediate(() => {
+            platform.bus._emitSignal(AVAHI_SERVICE_BROWSER_IFACE, "ItemNew", browserPath, [
+              1,
+              0,
+              "Buffered Light",
+              ELGATO_SERVICE_TYPE,
+              "local",
+              0,
+            ]);
+          });
+
+          // Store callback for later execution
+          deferredBrowserCallback = () => {
+            callback(platform.bus, createMockVariant([browserPath]));
+          };
+          return;
+        }
+        return originalCall.call(
+          platform.bus,
+          busName,
+          path,
+          iface,
+          method,
+          args,
+          replyType,
+          flags,
+          timeout,
+          cancellable,
+          callback,
+        );
+      },
+    );
+
+    const promise = discoverLights(platform);
+
+    // Wait for ItemNew to be emitted (and buffered)
+    await wait(50);
+
+    // Now let the browser callback complete (will process buffered signals)
+    deferredBrowserCallback();
+
+    await wait();
+
+    // Get the resolver path that was created from the buffered ItemNew
+    const resolverPath = platform.bus._getLastResolverPath();
+
+    // Emit Found for the resolver
+    platform.bus._emitSignal(AVAHI_SERVICE_RESOLVER_IFACE, "Found", resolverPath, [
+      1,
+      0,
+      "Buffered Light",
+      ELGATO_SERVICE_TYPE,
+      "local",
+      "host.local",
+      0,
+      "192.168.1.201",
+      9123,
+      [],
+      0,
+    ]);
+
+    // Emit AllForNow
+    platform.bus._emitSignal(AVAHI_SERVICE_BROWSER_IFACE, "AllForNow", browserPath, []);
+
+    await wait();
+
+    const result = await promise;
+
+    // Light should be found despite ItemNew being buffered
+    expect(result).toHaveLength(1);
+    expect(result[0].host).toBe("192.168.1.201");
+    expect(result[0].name).toBe("Buffered Light");
   });
 });
 
