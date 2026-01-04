@@ -1,6 +1,6 @@
 {
   "name": "gnome-shell-extension-elgato-lights",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "GNOME Shell extension to control Elgato Key Lights from Quick Settings",
   "type": "module",
   "scripts": {
