@@ -291,7 +291,7 @@ const ElgatoToggle = GObject.registerClass(
 
       const promises = this._lights.map(async (light) => {
         try {
-          return targetState ? await light.turnOn() : await light.turnOff();
+          targetState ? await light.turnOn() : await light.turnOff();
         } catch (e) {
           console.error(`[ElgatoLights] Failed to toggle ${light.name}: ${e.message}`);
         }
@@ -308,12 +308,20 @@ const ElgatoToggle = GObject.registerClass(
 
     /**
      * Handles refresh button click - re-runs discovery.
+     * Disables the button during discovery to prevent concurrent operations.
      */
     async _onRefreshClicked() {
+      if (this._refreshButton) {
+        this._refreshButton.reactive = false;
+      }
       try {
         await this._discoverLights();
       } catch (e) {
         console.error(`[ElgatoLights] Failed to refresh lights: ${e.message}`);
+      } finally {
+        if (this._refreshButton) {
+          this._refreshButton.reactive = true;
+        }
       }
     }
 
