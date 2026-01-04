@@ -182,7 +182,7 @@ const ElgatoToggle = GObject.registerClass(
       try {
         if (!(await isAvahiAvailable())) {
           if (this._destroyed) return;
-          this._statusItem.label.text = _("avahi-tools not installed");
+          this._statusItem.label.text = _("Avahi daemon not running");
           return;
         }
 
