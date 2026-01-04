@@ -21,13 +21,6 @@ import { parseCachedLights } from "../lib/parser.js";
 import { getLightbulbIcon } from "./icons.js";
 import { LightControlItem } from "./LightControlItem.js";
 
-/**
- * Main Quick Settings toggle for Elgato Lights.
- *
- * Displays in the GNOME Quick Settings panel alongside WiFi, Bluetooth, etc.
- * The main toggle controls all lights on/off, and the expanded menu shows
- * per-light controls.
- */
 const ElgatoToggle = GObject.registerClass(
   class ElgatoToggle extends QuickSettings.QuickMenuToggle {
     /**
