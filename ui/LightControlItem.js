@@ -16,7 +16,6 @@ import * as Slider from "resource:///org/gnome/shell/ui/slider.js";
 import { gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 
 import { Temperature, Brightness } from "../elgatoApi.js";
-import { getLightbulbIcon } from "./icons.js";
 
 /**
  * Per-light control item displayed in the Quick Settings menu.
@@ -31,9 +30,8 @@ const LightControlItem = GObject.registerClass(
      *
      * @param {ElgatoLight} light - The light instance to control
      * @param {Function} onChanged - Callback invoked when light state changes
-     * @param {string} extensionPath - The extension's base path for loading icons
      */
-    _init(light, onChanged, extensionPath) {
+    _init(light, onChanged) {
       super._init({
         activate: false,
         can_focus: false,
@@ -114,11 +112,11 @@ const LightControlItem = GObject.registerClass(
       });
       box.add_child(brightnessBox);
 
-      // Static "off" icon for brightness slider - represents the control concept,
+      // Static brightness icon for the slider - represents the control concept,
       // not the on/off state (which is indicated by the toggle button)
       brightnessBox.add_child(
         new St.Icon({
-          gicon: getLightbulbIcon(extensionPath, false),
+          icon_name: "display-brightness-symbolic",
           icon_size: 16,
           style_class: "elgato-slider-icon",
         }),
