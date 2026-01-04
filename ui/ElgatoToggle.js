@@ -255,11 +255,7 @@ const ElgatoToggle = GObject.registerClass(
 
       // Create control items for each light
       for (const light of this._lights) {
-        const item = new LightControlItem(
-          light,
-          () => this._updateToggleState(),
-          this._extensionObject.path,
-        );
+        const item = new LightControlItem(light, () => this._updateToggleState());
         this.menu.addMenuItem(item);
         this._lightItems.push(item);
       }
