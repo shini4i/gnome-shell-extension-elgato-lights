@@ -13,7 +13,7 @@ A GNOME Shell extension that integrates Elgato Key Light controls into the Quick
 ## Requirements
 
 - GNOME Shell 47, 48, or 49
-- `avahi-tools` package for mDNS discovery
+- `avahi-daemon` running (typically pre-installed on most Linux distributions)
 
 ## Installation
 
@@ -77,9 +77,9 @@ npm test
 
 ### Lights not discovered
 
-1. Ensure `avahi-tools` is installed and `avahi-daemon` is running
-2. Verify lights are on the same network
-3. Test manually: `avahi-browse -t -r -p _elg._tcp`
+1. Ensure `avahi-daemon` is running: `systemctl status avahi-daemon`
+2. Verify lights are on the same network as your computer
+3. Test mDNS discovery manually: `avahi-browse -t -r -p _elg._tcp` (requires `avahi-tools`)
 
 ### Extension not appearing
 

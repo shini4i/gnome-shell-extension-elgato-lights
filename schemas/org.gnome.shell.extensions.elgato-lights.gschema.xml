@@ -10,19 +10,5 @@
       <description>JSON array of previously discovered lights for faster startup</description>
     </key>
 
-    <!-- Manual lights for when discovery fails -->
-    <key name="manual-lights" type="s">
-      <default>''</default>
-      <summary>Manually configured lights</summary>
-      <description>JSON array of manually added lights</description>
-    </key>
-
-    <!-- Auto-discover on startup -->
-    <key name="auto-discover" type="b">
-      <default>true</default>
-      <summary>Auto-discover lights on startup</summary>
-      <description>Whether to automatically discover lights when the extension starts</description>
-    </key>
-
   </schema>
 </schemalist>
